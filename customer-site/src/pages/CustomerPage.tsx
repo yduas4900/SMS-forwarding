@@ -83,7 +83,7 @@ const CustomerPage: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   
   // 定时器引用
-  const timersRef = useRef<{ [key: number]: NodeJS.Timeout }>({});
+  const timersRef = useRef<{ [key: number]: number }>({});
 
   const currentLinkId = linkId || searchParams.get('link_id');
 
