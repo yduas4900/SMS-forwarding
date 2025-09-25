@@ -1,32 +1,32 @@
-# 简化的Railway部署Dockerfile
+# 修复React构建的Dockerfile
 FROM node:18-alpine as build
 
-# 设置工作目录
 WORKDIR /app
 
-# 复制前端项目
-COPY frontend/ ./frontend/
-COPY customer-site/ ./customer-site/
+# 设置npm配置
+RUN npm config set registry https://registry.npmjs.org/
 
-# 构建前端项目
-RUN cd frontend && \
-    npm install --legacy-peer-deps && \
-    npm run build
+# 构建前端
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm install --force
+COPY frontend/ ./
+RUN npm run build
 
-# 构建客户端项目
-RUN cd customer-site && \
-    npm install --legacy-peer-deps && \
-    npm run build
+# 构建客户端
+WORKDIR /app/customer-site
+COPY customer-site/package*.json ./
+RUN npm install --force
+COPY customer-site/ ./
+RUN npm run build
 
-# Python运行时
+# Python后端
 FROM python:3.11-slim
 
 WORKDIR /app
 
 # 安装系统依赖
-RUN apt-get update && \
-    apt-get install -y gcc libpq-dev && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/lists/*
 
 # 安装Python依赖
 COPY backend/requirements.txt ./
@@ -42,8 +42,6 @@ COPY --from=build /app/customer-site/build ./static/customer
 # 创建必要目录
 RUN mkdir -p uploads
 
-# 暴露端口
 EXPOSE 8000
 
-# 启动命令
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
