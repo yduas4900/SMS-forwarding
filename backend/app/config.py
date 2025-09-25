@@ -1,3 +1,12 @@
+"""
+配置文件
+Configuration settings for the application
+"""
+
+from pydantic import BaseSettings, Field
+from typing import Optional, List
+
+
 class Settings(BaseSettings):
     """应用配置类"""
     
@@ -14,9 +23,9 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     
-    # 服务器配置 - 强制8000端口
+    # 服务器配置
     host: str = "0.0.0.0"
-    port: int = 8000  # 强制8000端口，不从环境变量读取
+    port: int = 8000
     
     # 心跳配置
     heartbeat_interval: int = 10  # 秒
@@ -27,7 +36,7 @@ class Settings(BaseSettings):
     max_verification_attempts: int = 5
     max_access_attempts: int = 5
     
-    # CORS 配置
+    # CORS 配置 - 使用字符串，然后分割为列表
     allowed_origins_str: str = Field(default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001", alias="ALLOWED_ORIGINS")
     
     @property
@@ -38,3 +47,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+
+
+# 全局配置实例
+settings = Settings()
