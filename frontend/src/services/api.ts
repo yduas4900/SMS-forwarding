@@ -1,20 +1,3 @@
-```python
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-@router.post("/login")
-async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
-```
-
-但前端发送的是表单数据，导致422错误。
-
-## 🚀 完整修复代码
-
-### 修复 `frontend/src/services/api.ts`
-
-**完全替换整个文件内容：**
-
 ```typescript
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { message } from 'antd';
@@ -249,26 +232,4 @@ export const websocketAPI = {
 };
 
 export default apiClient;
-```
-
-## 🔍 关键修复点
-
-### 1. API基础URL修复
-```typescript
-// 使用相对路径，避免CORS问题
-const API_BASE_URL = process.env.REACT_APP_API_URL || '';
-```
-
-### 2. 登录API格式修复
-```typescript
-// 使用JSON格式，匹配后端期望
-login: (username: string, password: string) =>
-  apiClient.post('/api/auth/login', { username, password }),
-```
-
-### 3. 保持JSON Content-Type
-```typescript
-headers: {
-  'Content-Type': 'application/json',
-},
 ```
