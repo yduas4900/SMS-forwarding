@@ -2,7 +2,7 @@ import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { message } from 'antd';
 
 // API基础配置
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:8000');
 
 console.log('🌐 API配置 - 基础URL:', API_BASE_URL);
 
@@ -231,3 +231,4 @@ export const websocketAPI = {
 };
 
 export default apiClient;
+
