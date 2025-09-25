@@ -57,19 +57,10 @@ apiClient.interceptors.response.use(
   }
 );
 
-// 认证相关API - 修复版本
+// 认证相关API - 修复版本（使用JSON格式）
 export const authAPI = {
-  login: (username: string, password: string) => {
-    const formData = new URLSearchParams();
-    formData.append('username', username);
-    formData.append('password', password);
-    
-    return apiClient.post('/api/auth/login', formData, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    });
-  },
+  login: (username: string, password: string) =>
+    apiClient.post('/api/auth/login', { username, password }),
   
   getCurrentUser: () =>
     apiClient.get('/api/auth/me'),
@@ -240,3 +231,25 @@ export const websocketAPI = {
 };
 
 export default apiClient;
+```
+
+## 🔍 关键修复点
+
+### 1. API基础URL修复
+```typescript
+// 使用相对路径，避免CORS问题
+const API_BASE_URL = process.env.REACT_APP_API_URL || '';
+```
+
+### 2. 登录API格式修复
+```typescript
+// 使用JSON格式，匹配后端期望
+login: (username: string, password: string) =>
+  apiClient.post('/api/auth/login', { username, password }),
+```
+
+### 3. 保持JSON Content-Type
+```typescript
+headers: {
+  'Content-Type': 'application/json',
+},
