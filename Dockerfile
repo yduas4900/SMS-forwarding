@@ -1,19 +1,29 @@
-# 备用方案 - 跳过npm缓存问题
-FROM node:16-alpine as build
+# 使用Node 14 - 更稳定的版本
+FROM node:14-alpine as build
 
 WORKDIR /app
 
-# 清理npm缓存并设置配置
-RUN npm cache clean --force
+# 设置npm配置
 RUN npm config set registry https://registry.npmjs.org/
+RUN npm config set fetch-retry-mintimeout 20000
+RUN npm config set fetch-retry-maxtimeout 120000
 
-# 构建前端
-COPY frontend/ ./frontend/
-RUN cd frontend && rm -rf node_modules package-lock.json && npm install && npm run build
+# 构建前端 - 删除锁定文件重新生成
+COPY frontend/package.json ./frontend/
+WORKDIR /app/frontend
+RUN rm -f package-lock.json
+RUN npm cache clean --force
+RUN npm install --no-package-lock
+RUN npm run build
 
-# 构建客户端
-COPY customer-site/ ./customer-site/
-RUN cd customer-site && rm -rf node_modules package-lock.json && npm install && npm run build
+# 构建客户端 - 删除锁定文件重新生成
+WORKDIR /app
+COPY customer-site/package.json ./customer-site/
+WORKDIR /app/customer-site
+RUN rm -f package-lock.json
+RUN npm cache clean --force
+RUN npm install --no-package-lock
+RUN npm run build
 
 # Python后端
 FROM python:3.11-slim
