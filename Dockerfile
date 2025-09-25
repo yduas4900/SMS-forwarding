@@ -1,5 +1,5 @@
-# Railway部署用的多阶段Dockerfile
-# 这个文件用于在Railway平台上部署整个应用
+# Railway部署用的调试版Dockerfile
+# 用于修复502错误的简化版本
 
 FROM node:18-alpine as frontend-build
 
@@ -42,12 +42,12 @@ COPY --from=frontend-build /app/customer-site/build ./static/customer
 # 创建必要目录
 RUN mkdir -p /app/uploads
 
-# 暴露端口
-EXPOSE 8000
-
-# 复制启动脚本
+# 复制简化的启动脚本
 COPY start.sh ./
 RUN chmod +x start.sh
 
-# 启动命令
-CMD ["./start.sh"]
+# 暴露端口
+EXPOSE 8000
+
+# 使用简化版main.py启动
+CMD ["uvicorn", "app.main_simple:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "info"]
