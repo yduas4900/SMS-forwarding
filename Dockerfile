@@ -1,4 +1,4 @@
-# 修复原有React项目构建
+# 修复TypeScript严格模式问题
 FROM node:16-alpine as build
 
 WORKDIR /app
@@ -6,14 +6,14 @@ WORKDIR /app
 # 构建前端
 COPY frontend/ ./frontend/
 WORKDIR /app/frontend
-RUN npm install
+RUN npm install --legacy-peer-deps
 RUN npm run build
 
 # 构建客户端
 WORKDIR /app
 COPY customer-site/ ./customer-site/
 WORKDIR /app/customer-site
-RUN npm install
+RUN npm install --legacy-peer-deps
 RUN npm run build
 
 # Python后端
