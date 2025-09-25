@@ -2,8 +2,10 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
-import CustomerPage from './pages/CustomerPage';
+import 'antd/dist/reset.css';
 import './App.css';
+
+import CustomerPage from './pages/CustomerPage';
 
 const App: React.FC = () => {
   return (
@@ -11,10 +13,8 @@ const App: React.FC = () => {
       <Router>
         <div className="App">
           <Routes>
-            <Route path="/" element={<CustomerPage />} />
-            <Route path="/link/:linkId" element={<CustomerPage />} />
-            <Route path="/customer/:linkId" element={<CustomerPage />} />
             <Route path="/:linkId" element={<CustomerPage />} />
+            <Route path="/" element={<CustomerPage />} />
           </Routes>
         </div>
       </Router>
