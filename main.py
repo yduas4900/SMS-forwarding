@@ -219,9 +219,10 @@ async def serve_customer_page(link_id: str):
 
 if __name__ == "__main__":
     import uvicorn
+    # 强制使用8000端口，不依赖环境变量
     uvicorn.run(
         "main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=settings.debug
+        host="0.0.0.0",
+        port=8000,  # 强制8000端口
+        reload=False
     )
