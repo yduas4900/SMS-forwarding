@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "客户访问端网站 - 手机信息管理系统",
   "private": true,
+  "homepage": "/static/customer",
   "dependencies": {
     "@testing-library/jest-dom": "^5.16.4",
     "@testing-library/react": "^13.3.0",
