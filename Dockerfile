@@ -45,5 +45,9 @@ RUN mkdir -p /app/uploads
 # 暴露端口
 EXPOSE 8000
 
+# 复制启动脚本
+COPY start.sh ./
+RUN chmod +x start.sh
+
 # 启动命令
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["./start.sh"]
