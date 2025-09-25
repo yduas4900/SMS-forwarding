@@ -5,10 +5,13 @@ Main FastAPI application
 
 from fastapi import FastAPI, Request, Depends, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from sqlalchemy.orm import Session
 import logging
+import os
+from pathlib import Path
 
 from .config import settings
 from .database import init_database, get_db
@@ -95,16 +98,18 @@ async def health_check():
     }
 
 
-# 根路径
-@app.get("/")
-async def root():
-    """根路径"""
-    return {
-        "message": f"欢迎使用{settings.app_name}",
-        "version": settings.app_version,
-        "docs": "/docs",
-        "redoc": "/redoc"
-    }
+# 配置静态文件服务
+static_admin_path = Path(__file__).parent.parent / "static" / "admin"
+static_customer_path = Path(__file__).parent.parent / "static" / "customer"
+
+# 检查静态文件目录是否存在
+if static_admin_path.exists():
+    app.mount("/static/admin", StaticFiles(directory=str(static_admin_path)), name="admin_static")
+    logger.info(f"管理端静态文件目录已挂载: {static_admin_path}")
+
+if static_customer_path.exists():
+    app.mount("/static/customer", StaticFiles(directory=str(static_customer_path)), name="customer_static")
+    logger.info(f"客户端静态文件目录已挂载: {static_customer_path}")
 
 
 # 注册API路由
@@ -176,6 +181,51 @@ async def get_account_info_alias(
     from .api.links import get_account_info
     
     return await get_account_info(link_id, request, db)
+
+
+# 前端路由处理
+@app.get("/")
+async def serve_admin_index():
+    """管理端首页"""
+    admin_index = Path(__file__).parent.parent / "static" / "admin" / "index.html"
+    if admin_index.exists():
+        return FileResponse(str(admin_index))
+    else:
+        return {
+            "message": f"欢迎使用{settings.app_name}",
+            "version": settings.app_version,
+            "docs": "/docs",
+            "redoc": "/redoc",
+            "note": "前端文件未找到，请检查构建"
+        }
+
+@app.get("/login")
+async def serve_admin_login():
+    """管理端登录页面"""
+    admin_index = Path(__file__).parent.parent / "static" / "admin" / "index.html"
+    if admin_index.exists():
+        return FileResponse(str(admin_index))
+    else:
+        return {"error": "前端文件未找到"}
+
+@app.get("/dashboard")
+@app.get("/dashboard/{path:path}")
+async def serve_admin_dashboard(path: str = ""):
+    """管理端仪表板页面"""
+    admin_index = Path(__file__).parent.parent / "static" / "admin" / "index.html"
+    if admin_index.exists():
+        return FileResponse(str(admin_index))
+    else:
+        return {"error": "前端文件未找到"}
+
+@app.get("/customer/{link_id}")
+async def serve_customer_page(link_id: str):
+    """客户访问页面"""
+    customer_index = Path(__file__).parent.parent / "static" / "customer" / "index.html"
+    if customer_index.exists():
+        return FileResponse(str(customer_index))
+    else:
+        return {"error": "客户端页面未找到"}
 
 
 if __name__ == "__main__":
