@@ -32,9 +32,10 @@ const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const {
-    token: { colorBgContainer },
-  } = theme.useToken();
+  
+  // 修复theme.useToken()的null检查
+  const { token } = theme.useToken();
+  const colorBgContainer = token?.colorBgContainer || '#ffffff';
 
   // 菜单项配置
   const menuItems = [
