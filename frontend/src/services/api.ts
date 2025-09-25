@@ -1,4 +1,3 @@
-```typescript
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { message } from 'antd';
 
@@ -232,4 +231,3 @@ export const websocketAPI = {
 };
 
 export default apiClient;
-```
