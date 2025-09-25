@@ -1,10 +1,10 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { message } from 'antd';
 
-// API基础配置
-const API_BASE_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:8000');
+// API基础配置 - 修复版本
+const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
-console.log('🌐 API配置 - 基础URL:', API_BASE_URL);
+console.log('🌐 API配置 - 基础URL:', API_BASE_URL || '(相对路径)');
 
 // 创建axios实例
 const apiClient: AxiosInstance = axios.create({
@@ -57,10 +57,19 @@ apiClient.interceptors.response.use(
   }
 );
 
-// 认证相关API
+// 认证相关API - 修复版本
 export const authAPI = {
-  login: (username: string, password: string) =>
-    apiClient.post('/api/auth/login', { username, password }),
+  login: (username: string, password: string) => {
+    const formData = new URLSearchParams();
+    formData.append('username', username);
+    formData.append('password', password);
+    
+    return apiClient.post('/api/auth/login', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+  },
   
   getCurrentUser: () =>
     apiClient.get('/api/auth/me'),
@@ -231,4 +240,3 @@ export const websocketAPI = {
 };
 
 export default apiClient;
-
