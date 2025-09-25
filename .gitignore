@@ -1,0 +1,86 @@
+# 依赖包目录
+node_modules/
+*/node_modules/
+frontend/node_modules/
+customer-site/node_modules/
+
+# 构建产物
+build/
+dist/
+*/build/
+*/dist/
+frontend/build/
+customer-site/build/
+
+# 日志文件
+*.log
+logs/
+*/logs/
+
+# 环境变量文件
+.env
+.env.local
+.env.production
+.env.development
+
+# IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# Python缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# 临时文件
+*.tmp
+*.temp
+uploads/
+test_env/
+test_envecho/
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 测试文件和报告
+test_*.py
+debug_*.py
+*_test.py
+
+# 但保留重要的配置文件
+!package.json
+!package-lock.json
+!tsconfig.json
+!railway.json
+!docker-compose.yml
+!init.sql
+!start.sh
+!RAILWAY_DEPLOYMENT_GUIDE.md
+!TODO.md
+
+# 证书文件
+*.pem
+*.key
+*.crt
+
+# 压缩文件
+*.zip
+*.tar.gz
+*.rar
+
+# 特定的大文件夹
+android-client/local.properties
+android-client/app/build/
+android-client/build/
+android-client/.gradle/
