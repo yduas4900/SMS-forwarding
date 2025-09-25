@@ -1,21 +1,19 @@
-# 最简单可靠的构建方案
-FROM node:16-alpine as frontend-build
+# 备用方案 - 跳过npm缓存问题
+FROM node:16-alpine as build
 
 WORKDIR /app
 
-# 构建前端 - 使用更稳定的方法
-COPY frontend/package.json frontend/package-lock.json ./frontend/
-RUN cd frontend && npm ci --only=production --no-audit --no-fund
+# 清理npm缓存并设置配置
+RUN npm cache clean --force
+RUN npm config set registry https://registry.npmjs.org/
 
+# 构建前端
 COPY frontend/ ./frontend/
-RUN cd frontend && npm run build
+RUN cd frontend && rm -rf node_modules package-lock.json && npm install && npm run build
 
 # 构建客户端
-COPY customer-site/package.json customer-site/package-lock.json ./customer-site/
-RUN cd customer-site && npm ci --only=production --no-audit --no-fund
-
 COPY customer-site/ ./customer-site/
-RUN cd customer-site && npm run build
+RUN cd customer-site && rm -rf node_modules package-lock.json && npm install && npm run build
 
 # Python后端
 FROM python:3.11-slim
@@ -33,8 +31,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./
 
 # 复制构建的前端文件
-COPY --from=frontend-build /app/frontend/build ./static/admin
-COPY --from=frontend-build /app/customer-site/build ./static/customer
+COPY --from=build /app/frontend/build ./static/admin
+COPY --from=build /app/customer-site/build ./static/customer
 
 # 创建必要目录
 RUN mkdir -p uploads
