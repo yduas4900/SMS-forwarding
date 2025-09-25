@@ -1,10 +1,7 @@
-# 最终修复版本 - 确保所有依赖正确安装
+# 修复原有React项目构建
 FROM node:16-alpine as build
 
 WORKDIR /app
-
-# 设置npm配置
-RUN npm config set registry https://registry.npmjs.org/
 
 # 构建前端
 COPY frontend/ ./frontend/
