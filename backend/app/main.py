@@ -1,6 +1,6 @@
 """
-FastAPI 主应用 - 完整版本（包含静态文件服务）
-Main FastAPI application - Full version with static files
+FastAPI 主应用 - 完整版本（包含前端路由和静态文件服务）
+Main FastAPI application - Full version with frontend routes and static files
 """
 
 from fastapi import FastAPI, Request, Depends, HTTPException, Query, status
@@ -202,27 +202,64 @@ async def get_account_info_alias(
         )
 
 
-# 前端路由处理
+# 🎯 关键：前端路由处理（这是修复404的核心）
 @app.get("/")
-@app.get("/login")
-@app.get("/dashboard")
-@app.get("/dashboard/{path:path}")
-async def serve_admin_app(path: str = ""):
-    """管理端应用 - 所有管理端路由"""
+async def serve_root():
+    """根路径 - 重定向到管理端"""
     admin_index = static_admin_path / "index.html"
     if admin_index.exists():
-        logger.info(f"📄 服务管理端页面: {admin_index}")
+        logger.info(f"📄 服务管理端首页: {admin_index}")
         return FileResponse(str(admin_index))
     else:
         logger.error(f"❌ 管理端文件未找到: {admin_index}")
         return JSONResponse(
+            content={
+                "message": f"欢迎使用{settings.app_name}",
+                "version": settings.app_version,
+                "docs": "/docs",
+                "redoc": "/redoc",
+                "health": "/health",
+                "note": "前端文件未找到，请使用API文档进行管理",
+                "expected_path": str(admin_index)
+            }
+        )
+
+@app.get("/login")
+async def serve_login():
+    """登录页面"""
+    admin_index = static_admin_path / "index.html"
+    if admin_index.exists():
+        logger.info(f"📄 服务登录页面: {admin_index}")
+        return FileResponse(str(admin_index))
+    else:
+        logger.error(f"❌ 登录页面文件未找到: {admin_index}")
+        return JSONResponse(
             status_code=404,
             content={
-                "message": "管理端页面未找到",
-                "note": "前端文件可能未正确构建或部署",
+                "error": "登录页面未找到",
+                "message": "前端文件可能未正确构建",
                 "expected_path": str(admin_index),
-                "api_docs": "/docs",
-                "health_check": "/health"
+                "api_docs": "/docs"
+            }
+        )
+
+@app.get("/dashboard")
+@app.get("/dashboard/{path:path}")
+async def serve_dashboard(path: str = ""):
+    """管理面板页面"""
+    admin_index = static_admin_path / "index.html"
+    if admin_index.exists():
+        logger.info(f"📄 服务管理面板: {admin_index} (路径: {path})")
+        return FileResponse(str(admin_index))
+    else:
+        logger.error(f"❌ 管理面板文件未找到: {admin_index}")
+        return JSONResponse(
+            status_code=404,
+            content={
+                "error": "管理面板未找到",
+                "path": path,
+                "expected_path": str(admin_index),
+                "api_docs": "/docs"
             }
         )
 
@@ -231,7 +268,7 @@ async def serve_customer_page(link_id: str):
     """客户访问页面"""
     customer_index = static_customer_path / "index.html"
     if customer_index.exists():
-        logger.info(f"📄 服务客户端页面: {customer_index}")
+        logger.info(f"📄 服务客户端页面: {customer_index} (链接: {link_id})")
         return FileResponse(str(customer_index))
     else:
         logger.error(f"❌ 客户端文件未找到: {customer_index}")
@@ -239,6 +276,7 @@ async def serve_customer_page(link_id: str):
             status_code=404,
             content={
                 "error": "客户端页面未找到",
+                "link_id": link_id,
                 "expected_path": str(customer_index)
             }
         )
