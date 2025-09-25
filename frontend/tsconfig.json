@@ -27,7 +27,8 @@
     "noImplicitThis": false,
     "noImplicitReturns": false,
     "noUnusedLocals": false,
-    "noUnusedParameters": false
+    "noUnusedParameters": false,
+    "baseUrl": "src"
   },
   "include": [
     "src"
