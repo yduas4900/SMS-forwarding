@@ -1,24 +1,21 @@
-# 修复React构建的Dockerfile
-FROM node:18-alpine as build
+# 最简单可靠的构建方案
+FROM node:16-alpine as frontend-build
 
 WORKDIR /app
 
-# 设置npm配置
-RUN npm config set registry https://registry.npmjs.org/
+# 构建前端 - 使用更稳定的方法
+COPY frontend/package.json frontend/package-lock.json ./frontend/
+RUN cd frontend && npm ci --only=production --no-audit --no-fund
 
-# 构建前端
-WORKDIR /app/frontend
-COPY frontend/package*.json ./
-RUN npm install --force
-COPY frontend/ ./
-RUN npm run build
+COPY frontend/ ./frontend/
+RUN cd frontend && npm run build
 
 # 构建客户端
-WORKDIR /app/customer-site
-COPY customer-site/package*.json ./
-RUN npm install --force
-COPY customer-site/ ./
-RUN npm run build
+COPY customer-site/package.json customer-site/package-lock.json ./customer-site/
+RUN cd customer-site && npm ci --only=production --no-audit --no-fund
+
+COPY customer-site/ ./customer-site/
+RUN cd customer-site && npm run build
 
 # Python后端
 FROM python:3.11-slim
@@ -36,8 +33,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./
 
 # 复制构建的前端文件
-COPY --from=build /app/frontend/build ./static/admin
-COPY --from=build /app/customer-site/build ./static/customer
+COPY --from=frontend-build /app/frontend/build ./static/admin
+COPY --from=frontend-build /app/customer-site/build ./static/customer
 
 # 创建必要目录
 RUN mkdir -p uploads
