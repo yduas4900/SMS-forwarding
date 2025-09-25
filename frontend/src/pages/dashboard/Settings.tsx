@@ -1,0 +1,408 @@
+import React, { useState } from 'react';
+import {
+  Card,
+  Form,
+  Input,
+  Button,
+  Switch,
+  Select,
+  InputNumber,
+  message,
+  Row,
+  Col,
+  Typography,
+  Divider,
+  Space,
+  Alert,
+  Modal,
+  Tabs
+} from 'antd';
+import {
+  SettingOutlined,
+  SaveOutlined,
+  ReloadOutlined,
+  ExclamationCircleOutlined,
+  AppstoreOutlined
+} from '@ant-design/icons';
+import ServiceTypeManagement from './ServiceTypeManagement';
+
+const { Title, Text } = Typography;
+const { TextArea } = Input;
+const { Option } = Select;
+
+interface SystemSettings {
+  // 系统基础设置
+  systemName: string;
+  systemDescription: string;
+  systemVersion: string;
+  
+  // 安全设置
+  sessionTimeout: number;
+  maxLoginAttempts: number;
+  passwordMinLength: number;
+  enableTwoFactor: boolean;
+  
+  // 通知设置
+  enableEmailNotification: boolean;
+  enableSmsNotification: boolean;
+  notificationEmail: string;
+  
+  // 数据设置
+  dataRetentionDays: number;
+  autoBackup: boolean;
+  backupFrequency: string;
+  
+  // 界面设置
+  theme: string;
+  language: string;
+  timezone: string;
+}
+
+const Settings: React.FC = () => {
+  const [form] = Form.useForm();
+  const [loading, setLoading] = useState(false);
+  const [settings, setSettings] = useState<SystemSettings>({
+    systemName: '手机信息管理系统',
+    systemDescription: '用于管理手机设备信息、短信记录和账号链接的综合管理平台',
+    systemVersion: 'v1.0.0',
+    
+    sessionTimeout: 30,
+    maxLoginAttempts: 5,
+    passwordMinLength: 8,
+    enableTwoFactor: false,
+    
+    enableEmailNotification: true,
+    enableSmsNotification: false,
+    notificationEmail: 'admin@example.com',
+    
+    dataRetentionDays: 90,
+    autoBackup: true,
+    backupFrequency: 'daily',
+    
+    theme: 'light',
+    language: 'zh-CN',
+    timezone: 'Asia/Shanghai'
+  });
+
+  const handleSave = async (values: SystemSettings) => {
+    setLoading(true);
+    try {
+      // 模拟API调用
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      setSettings(values);
+      message.success('系统设置保存成功！');
+    } catch (error) {
+      message.error('保存失败，请重试');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReset = () => {
+    Modal.confirm({
+      title: '确认重置',
+      icon: <ExclamationCircleOutlined />,
+      content: '确定要重置所有设置为默认值吗？此操作不可撤销。',
+      okText: '确定',
+      cancelText: '取消',
+      onOk() {
+        form.resetFields();
+        message.success('设置已重置为默认值');
+      },
+    });
+  };
+
+  const handleTestConnection = async () => {
+    message.loading('正在测试连接...', 2);
+    // 模拟测试
+    setTimeout(() => {
+      message.success('连接测试成功！');
+    }, 2000);
+  };
+
+  // 系统设置标签页内容
+  const SystemSettingsTab = () => (
+    <Form
+      form={form}
+      layout="vertical"
+      initialValues={settings}
+      onFinish={handleSave}
+    >
+      {/* 系统基础设置 */}
+      <Title level={4}>基础设置</Title>
+      <Row gutter={16}>
+        <Col span={12}>
+          <Form.Item
+            name="systemName"
+            label="系统名称"
+            rules={[{ required: true, message: '请输入系统名称' }]}
+          >
+            <Input />
+          </Form.Item>
+        </Col>
+        <Col span={12}>
+          <Form.Item
+            name="systemVersion"
+            label="系统版本"
+          >
+            <Input disabled />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Form.Item
+        name="systemDescription"
+        label="系统描述"
+      >
+        <TextArea
+          rows={3}
+          placeholder="请输入系统描述"
+          maxLength={500}
+          showCount
+        />
+      </Form.Item>
+
+      <Divider />
+
+      {/* 安全设置 */}
+      <Title level={4}>安全设置</Title>
+      <Row gutter={16}>
+        <Col span={8}>
+          <Form.Item
+            name="sessionTimeout"
+            label="会话超时时间（分钟）"
+            rules={[{ required: true, message: '请输入会话超时时间' }]}
+          >
+            <InputNumber min={5} max={480} style={{ width: '100%' }} />
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item
+            name="maxLoginAttempts"
+            label="最大登录尝试次数"
+            rules={[{ required: true, message: '请输入最大登录尝试次数' }]}
+          >
+            <InputNumber min={3} max={10} style={{ width: '100%' }} />
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item
+            name="passwordMinLength"
+            label="密码最小长度"
+            rules={[{ required: true, message: '请输入密码最小长度' }]}
+          >
+            <InputNumber min={6} max={20} style={{ width: '100%' }} />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Form.Item
+        name="enableTwoFactor"
+        label="启用双因素认证"
+        valuePropName="checked"
+      >
+        <Switch />
+      </Form.Item>
+
+      <Divider />
+
+      {/* 通知设置 */}
+      <Title level={4}>通知设置</Title>
+      <Row gutter={16}>
+        <Col span={12}>
+          <Form.Item
+            name="enableEmailNotification"
+            label="启用邮件通知"
+            valuePropName="checked"
+          >
+            <Switch />
+          </Form.Item>
+        </Col>
+        <Col span={12}>
+          <Form.Item
+            name="enableSmsNotification"
+            label="启用短信通知"
+            valuePropName="checked"
+          >
+            <Switch />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Form.Item
+        name="notificationEmail"
+        label="通知邮箱"
+        rules={[
+          { type: 'email', message: '请输入有效的邮箱地址' },
+          { required: true, message: '请输入通知邮箱' }
+        ]}
+      >
+        <Input />
+      </Form.Item>
+
+      <Divider />
+
+      {/* 数据设置 */}
+      <Title level={4}>数据设置</Title>
+      <Row gutter={16}>
+        <Col span={12}>
+          <Form.Item
+            name="dataRetentionDays"
+            label="数据保留天数"
+            rules={[{ required: true, message: '请输入数据保留天数' }]}
+          >
+            <InputNumber min={30} max={365} style={{ width: '100%' }} />
+          </Form.Item>
+        </Col>
+        <Col span={12}>
+          <Form.Item
+            name="backupFrequency"
+            label="备份频率"
+            rules={[{ required: true, message: '请选择备份频率' }]}
+          >
+            <Select>
+              <Option value="daily">每日</Option>
+              <Option value="weekly">每周</Option>
+              <Option value="monthly">每月</Option>
+            </Select>
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Form.Item
+        name="autoBackup"
+        label="启用自动备份"
+        valuePropName="checked"
+      >
+        <Switch />
+      </Form.Item>
+
+      <Divider />
+
+      {/* 界面设置 */}
+      <Title level={4}>界面设置</Title>
+      <Row gutter={16}>
+        <Col span={8}>
+          <Form.Item
+            name="theme"
+            label="主题"
+            rules={[{ required: true, message: '请选择主题' }]}
+          >
+            <Select>
+              <Option value="light">浅色主题</Option>
+              <Option value="dark">深色主题</Option>
+              <Option value="auto">跟随系统</Option>
+            </Select>
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item
+            name="language"
+            label="语言"
+            rules={[{ required: true, message: '请选择语言' }]}
+          >
+            <Select>
+              <Option value="zh-CN">简体中文</Option>
+              <Option value="en-US">English</Option>
+            </Select>
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item
+            name="timezone"
+            label="时区"
+            rules={[{ required: true, message: '请选择时区' }]}
+          >
+            <Select>
+              <Option value="Asia/Shanghai">北京时间 (UTC+8)</Option>
+              <Option value="UTC">协调世界时 (UTC)</Option>
+              <Option value="America/New_York">纽约时间 (UTC-5)</Option>
+            </Select>
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Divider />
+
+      <Alert
+        message="重要提示"
+        description="修改系统设置可能会影响系统的正常运行，请谨慎操作。建议在修改前备份当前配置。"
+        type="warning"
+        showIcon
+        style={{ marginBottom: 24 }}
+      />
+
+      <Form.Item>
+        <Space>
+          <Button
+            type="primary"
+            icon={<SaveOutlined />}
+            htmlType="submit"
+            loading={loading}
+            size="large"
+          >
+            保存设置
+          </Button>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={handleReset}
+            size="large"
+          >
+            重置默认
+          </Button>
+          <Button
+            onClick={handleTestConnection}
+            size="large"
+          >
+            测试连接
+          </Button>
+        </Space>
+      </Form.Item>
+    </Form>
+  );
+
+  // 标签页配置
+  const tabItems = [
+    {
+      key: 'system',
+      label: (
+        <span>
+          <SettingOutlined />
+          系统设置
+        </span>
+      ),
+      children: <SystemSettingsTab />,
+    },
+    {
+      key: 'service-types',
+      label: (
+        <span>
+          <AppstoreOutlined />
+          服务类型管理
+        </span>
+      ),
+      children: <ServiceTypeManagement />,
+    },
+  ];
+
+  return (
+    <div style={{ padding: '0' }}>
+      <Card>
+        <Title level={3} style={{ marginBottom: 24 }}>
+          <SettingOutlined style={{ marginRight: 8 }} />
+          系统管理
+        </Title>
+
+        <Tabs
+          defaultActiveKey="system"
+          items={tabItems}
+          size="large"
+          tabBarStyle={{ marginBottom: 24 }}
+        />
+      </Card>
+    </div>
+  );
+};
+
+export default Settings;

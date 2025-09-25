@@ -1,0 +1,23 @@
+{
+  "short_name": "短信管理系统",
+  "name": "手机信息管理系统 - 管理端",
+  "description": "用于管理Android设备信息、短信数据和会员账号的管理系统",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "zh-CN",
+  "categories": ["business", "productivity", "utilities"],
+  "screenshots": [],
+  "related_applications": [],
+  "prefer_related_applications": false
+}
