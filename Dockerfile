@@ -1,4 +1,3 @@
-```dockerfile
 # 简化的Railway部署Dockerfile
 FROM node:18-alpine as build
 
@@ -48,4 +47,3 @@ EXPOSE 8000
 
 # 启动命令
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
