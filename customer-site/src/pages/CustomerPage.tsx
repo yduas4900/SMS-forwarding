@@ -303,7 +303,10 @@ const CustomerPage: React.FC = () => {
               : box
           ));
           
-          fetchSingleSms(currentIndex + 1, retrievedSmsIds, totalCount, waitTime);
+          // 🔥 修复：添加额外延迟避免API调用过于频繁
+          setTimeout(() => {
+            fetchSingleSms(currentIndex + 1, retrievedSmsIds, totalCount, waitTime);
+          }, currentIndex * 1000); // 每条短信额外延迟1秒
           currentIndex++;
           console.log(`⏰ 第 ${currentIndex} 条短信倒计时结束，开始获取，剩余倒计时: ${newCountdown}s`);
         }
@@ -320,7 +323,7 @@ const CustomerPage: React.FC = () => {
             clearInterval(intervalRef.current);
           }
           message.success(`渐进式获取完成，共获取 ${currentIndex} 条短信`);
-          // 清空占位框
+          // 🔥 修复：清空所有剩余的占位框
           setPlaceholderBoxes([]);
           return 0;
         }
@@ -330,15 +333,21 @@ const CustomerPage: React.FC = () => {
     }, 1000);
   };
 
-  // 🔥 修复后的单条短信获取函数 - 智能获取最新短信
-  const fetchSingleSms = async (index: number, retrievedSmsIds: Set<number>, totalCount: number, waitTime: number) => {
+  // 🔥 修复后的单条短信获取函数 - 智能获取最新短信，添加重试机制
+  const fetchSingleSms = async (index: number, retrievedSmsIds: Set<number>, totalCount: number, waitTime: number, retryCount = 0) => {
     try {
-      console.log(`📱 正在获取第 ${index}/${totalCount} 条短信...`);
+      console.log(`📱 正在获取第 ${index}/${totalCount} 条短信... (重试次数: ${retryCount})`);
+      
+      // 🔥 添加延迟，避免API调用过于频繁
+      if (retryCount > 0) {
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 重试时等待2秒
+      }
       
       const response = await axios.get(`${API_BASE_URL}/api/get_verification_code`, {
         params: { 
           link_id: currentLinkId
-        }
+        },
+        timeout: 10000 // 10秒超时
       });
       
       console.log(`第 ${index} 条短信API响应:`, response.data);
@@ -391,12 +400,8 @@ const CustomerPage: React.FC = () => {
               [selectedSms.id]: waitTime
             }));
             
-            // 🔥 更新占位框状态为已完成，并立即显示短信
-            setPlaceholderBoxes(prev => prev.map(box => 
-              box.index === index 
-                ? { ...box, status: 'completed', message: `第 ${index} 条短信获取成功: ${newCode.code}` }
-                : box
-            ));
+            // 🔥 修复：获取成功后移除对应的占位框，让验证码直接显示
+            setPlaceholderBoxes(prev => prev.filter(box => box.index !== index));
             
             console.log(`✅ 第 ${index} 条短信获取成功: ${newCode.code} (时间: ${selectedSms.sms_timestamp})`);
             message.success(`第 ${index} 条短信获取成功: ${newCode.code}`);
@@ -404,45 +409,61 @@ const CustomerPage: React.FC = () => {
             console.log(`⚠️ 第 ${index} 条短信：所有短信都已获取过`);
             message.info(`第 ${index} 条短信：所有短信都已获取过`);
             
-            // 🔥 更新占位框状态为已完成（但无新短信）
-            setPlaceholderBoxes(prev => prev.map(box => 
-              box.index === index 
-                ? { ...box, status: 'completed', message: `第 ${index} 条短信：无新短信` }
-                : box
-            ));
+            // 🔥 修复：无新短信时也移除占位框
+            setPlaceholderBoxes(prev => prev.filter(box => box.index !== index));
           }
         } else {
           console.log(`📭 第 ${index} 条短信暂无匹配内容`);
           message.info(`第 ${index} 条短信暂无匹配内容`);
           
-          // 🔥 更新占位框状态
-          setPlaceholderBoxes(prev => prev.map(box => 
-            box.index === index 
-              ? { ...box, status: 'completed', message: `第 ${index} 条短信：暂无内容` }
-              : box
-          ));
+          // 🔥 修复：暂无内容时也移除占位框
+          setPlaceholderBoxes(prev => prev.filter(box => box.index !== index));
         }
       } else {
+        // 🔥 添加重试逻辑
+        if (retryCount < 2) {
+          console.log(`⚠️ 第 ${index} 条短信获取失败，准备重试: ${response.data.message}`);
+          setPlaceholderBoxes(prev => prev.map(box => 
+            box.index === index 
+              ? { ...box, status: 'fetching', message: `第 ${index} 条短信重试中... (${retryCount + 1}/3)` }
+              : box
+          ));
+          
+          // 延迟后重试
+          setTimeout(() => {
+            fetchSingleSms(index, retrievedSmsIds, totalCount, waitTime, retryCount + 1);
+          }, 3000);
+          return;
+        }
+        
         console.log(`❌ 第 ${index} 条短信获取失败:`, response.data.message);
         message.warning(`第 ${index} 条短信获取失败: ${response.data.message}`);
         
-        // 🔥 更新占位框状态为失败
-        setPlaceholderBoxes(prev => prev.map(box => 
-          box.index === index 
-            ? { ...box, status: 'completed', message: `第 ${index} 条短信获取失败` }
-            : box
-        ));
+        // 🔥 移除失败的占位框
+        setPlaceholderBoxes(prev => prev.filter(box => box.index !== index));
       }
     } catch (error: any) {
+      // 🔥 添加重试逻辑
+      if (retryCount < 2 && (error.response?.status === 429 || error.code === 'ECONNABORTED')) {
+        console.log(`⚠️ 第 ${index} 条短信网络错误，准备重试:`, error.message);
+        setPlaceholderBoxes(prev => prev.map(box => 
+          box.index === index 
+            ? { ...box, status: 'fetching', message: `第 ${index} 条短信重试中... (${retryCount + 1}/3)` }
+            : box
+        ));
+        
+        // 延迟后重试
+        setTimeout(() => {
+          fetchSingleSms(index, retrievedSmsIds, totalCount, waitTime, retryCount + 1);
+        }, 3000);
+        return;
+      }
+      
       console.error(`获取第 ${index} 条短信失败:`, error);
       message.error(`第 ${index} 条短信获取失败: ${error.response?.data?.message || error.message}`);
       
-      // 🔥 更新占位框状态为失败
-      setPlaceholderBoxes(prev => prev.map(box => 
-        box.index === index 
-          ? { ...box, status: 'completed', message: `第 ${index} 条短信获取失败` }
-          : box
-      ));
+      // 🔥 移除失败的占位框
+      setPlaceholderBoxes(prev => prev.filter(box => box.index !== index));
     }
   };
 
