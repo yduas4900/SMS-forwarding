@@ -116,6 +116,17 @@ const CustomerPage: React.FC = () => {
         const accountData = response.data.data.account_info;
         const linkData = response.data.data.link_info;
         
+        console.log('🔍 API返回的完整响应:', response.data);
+        console.log('🔍 API返回的账号数据:', accountData);
+        console.log('🔍 API返回的链接数据:', linkData);
+        console.log('🔍 账号ID:', accountData.id);
+        
+        if (!accountData.id) {
+          console.error('❌ 账号ID为空或undefined:', accountData);
+          setError('账号数据异常：缺少账号ID');
+          return;
+        }
+        
         setAccountInfo({
           id: accountData.id,
           account_name: accountData.account_name,
@@ -155,13 +166,23 @@ const CustomerPage: React.FC = () => {
 
   // 🔥 开始渐进式获取短信 - 为每条短信创建独立倒计时
   const startProgressiveRetrieval = useCallback(async () => {
-    if (!linkInfo || progressiveRetrievalState.isActive) return;
+    if (!accountInfo || !linkInfo || progressiveRetrievalState.isActive) return;
 
     console.log('🚀 开始渐进式获取短信流程');
     
     try {
+      // 🔥 修复：使用accountInfo.id而不是linkInfo.account_id
+      const accountId = accountInfo.id;
+      console.log('🔍 使用账号ID:', accountId);
+      
+      if (!accountId) {
+        console.error('❌ 账号ID无效:', accountId);
+        setError('账号ID无效，无法获取短信规则');
+        return;
+      }
+      
       // 获取短信规则配置
-      const rulesResponse = await fetch(`${API_BASE_URL}/api/sms_rules?account_id=${linkInfo.account_id}`, {
+      const rulesResponse = await fetch(`${API_BASE_URL}/api/sms_rules?account_id=${accountId}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -214,7 +235,7 @@ const CustomerPage: React.FC = () => {
       console.error('❌ 启动渐进式获取失败:', error);
       setError('启动获取流程失败');
     }
-  }, [linkInfo, progressiveRetrievalState.isActive]);
+  }, [accountInfo, linkInfo, progressiveRetrievalState.isActive]);
 
   // 🔥 获取指定序号的短信
   const retrieveSpecificSms = useCallback(async (smsIndex: number) => {
