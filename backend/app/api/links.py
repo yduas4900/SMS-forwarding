@@ -434,6 +434,9 @@ async def get_account_info(
                     "link_id": link.link_id,
                     "access_count": link.access_count,
                     "max_access_count": link.max_access_count,
+                    "max_verification_count": link.max_verification_count,  # 🔥 新增
+                    "verification_count": link.verification_count,  # 🔥 新增：当前验证码获取次数
+                    "access_session_interval": link.access_session_interval,  # 🔥 新增
                     "verification_wait_time": link.verification_wait_time,  # 🔥 使用数据库中的真实值！
                     "created_at": link.created_at.isoformat() if link.created_at else None
                 }
@@ -619,10 +622,11 @@ async def get_verification_codes(
             "data": {
                 "sms_list": sms_data,
                 "count": len(sms_data),
-                "verification_count": link.verification_count,
+                "verification_count": link.verification_count,  # 🔥 确保返回最新的验证码次数
                 "max_verification_count": link.max_verification_count,
                 "next_allowed_time": None,  # 🔥 移除冷却时间限制，由前端控制
-                "rules_applied": len(active_rules) > 0
+                "rules_applied": len(active_rules) > 0,
+                "all_matched_sms": sms_data  # 🔥 确保前端能获取到短信数据
             }
         }
         

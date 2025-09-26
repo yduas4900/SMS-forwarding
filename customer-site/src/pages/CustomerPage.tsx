@@ -271,6 +271,15 @@ const CustomerPage: React.FC = () => {
       const data = await response.json();
       console.log(`✅ 第 ${smsIndex} 条短信API响应:`, data);
 
+      // 🔥 实时更新验证码获取次数
+      if (data.data?.verification_count !== undefined) {
+        setLinkInfo(prev => prev ? {
+          ...prev,
+          verification_count: data.data.verification_count
+        } : null);
+        console.log(`📊 实时更新验证码次数: ${data.data.verification_count}`);
+      }
+
       if (data.success && data.data?.all_matched_sms?.length > 0) {
         // 过滤掉已经获取过的短信，获取最新的
         const newSms = data.data.all_matched_sms.filter((sms: any) => 
