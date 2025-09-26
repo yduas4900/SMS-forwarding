@@ -255,25 +255,34 @@ const CustomerPage: React.FC = () => {
     const totalCountdown = totalCount * waitTime;
     setCountdown(totalCountdown);
     
-    message.info(`开始获取 ${totalCount} 条短信，预计需要 ${totalCountdown} 秒`);
+    message.info(`开始获取 ${totalCount} 条短信，每条间隔 ${waitTime} 秒`);
     
-    // 立即获取第一条短信
+    // 🔥 修复：立即获取第一条短信，并为其设置倒计时
     fetchSingleSms(currentIndex + 1, retrievedSmsIds, totalCount, waitTime);
     currentIndex++;
     
-    // 设置定时器获取后续短信
+    // 🔥 修复：如果只有1条短信，直接结束
+    if (totalCount === 1) {
+      setTimeout(() => {
+        setCountdown(0);
+        message.success(`获取完成，共获取 1 条短信`);
+      }, 1000);
+      return;
+    }
+    
+    // 设置定时器获取后续短信 - 每waitTime秒获取一条
+    let nextFetchTime = waitTime;
+    
     intervalRef.current = setInterval(() => {
       setCountdown(prev => {
         const newCountdown = prev - 1;
         
-        // 检查是否到了获取下一条短信的时间
-        const elapsedTime = totalCountdown - newCountdown;
-        const shouldFetchIndex = Math.floor(elapsedTime / waitTime);
-        
-        if (shouldFetchIndex > currentIndex && currentIndex < totalCount) {
+        // 🔥 修复：每waitTime秒获取一条短信
+        if (newCountdown === totalCountdown - nextFetchTime && currentIndex < totalCount) {
           fetchSingleSms(currentIndex + 1, retrievedSmsIds, totalCount, waitTime);
           currentIndex++;
-          console.log(`⏰ 第 ${currentIndex} 条短信获取时机到达`);
+          nextFetchTime += waitTime;
+          console.log(`⏰ 第 ${currentIndex} 条短信获取时机到达，剩余倒计时: ${newCountdown}s`);
         }
         
         // 倒计时结束
@@ -281,7 +290,6 @@ const CustomerPage: React.FC = () => {
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
           }
-          setLoading(false);
           message.success(`渐进式获取完成，共获取 ${currentIndex} 条短信`);
           return 0;
         }

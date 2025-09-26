@@ -208,11 +208,22 @@ async def get_verification_code_alias(
                 }
             }
         
-        # 检查是否允许获取验证码
-        if not link.is_verification_allowed():
+        # 检查基本访问权限（不检查时间间隔，因为前端会控制）
+        if not link.is_access_allowed():
             return {
                 "success": False,
-                "message": "验证码获取次数已达上限或冷却时间未到",
+                "message": "链接已过期或访问次数已达上限",
+                "data": {
+                    "all_matched_sms": [],
+                    "count": 0
+                }
+            }
+        
+        # 检查验证码获取次数限制（但不检查时间间隔）
+        if link.max_verification_count > 0 and link.verification_count >= link.max_verification_count:
+            return {
+                "success": False,
+                "message": "验证码获取次数已达上限",
                 "data": {
                     "all_matched_sms": [],
                     "count": 0
