@@ -269,7 +269,9 @@ const LinkManagement: React.FC = () => {
 
   // 复制链接
   const handleCopyLink = (linkId: string) => {
-    const url = `http://localhost:3001?link_id=${linkId}`;
+    // 使用当前域名，自动适配开发和生产环境
+    const baseUrl = window.location.origin;
+    const url = `${baseUrl}/customer/${linkId}`;
     navigator.clipboard.writeText(url).then(() => {
       message.success('链接已复制到剪贴板');
     }).catch(() => {

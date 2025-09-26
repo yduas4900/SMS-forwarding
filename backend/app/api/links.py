@@ -99,9 +99,8 @@ async def create_links_batch(
                 expires_at=expires_at
             )
             
-            # 生成完整链接URL (这里可以根据实际需求调整)
-            base_url = "https://your-domain.com/customer"  # 需要配置实际域名
-            new_link.link_url = f"{base_url}/{new_link.link_id}"
+            # 生成完整链接URL - 使用相对路径，让前端处理域名
+            new_link.link_url = f"/customer/{new_link.link_id}"
             
             db.add(new_link)
             created_links.append(new_link)
