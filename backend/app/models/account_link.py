@@ -115,12 +115,13 @@ class AccountLink(Base):
         if self.max_verification_count > 0 and self.verification_count >= self.max_verification_count:
             return False
             
-        # 检查时间间隔
-        if self.last_verification_time:
-            from datetime import datetime, timezone, timedelta
-            now = datetime.now(timezone.utc)
-            time_diff = (now - self.last_verification_time).total_seconds()
-            if time_diff < self.verification_interval:
-                return False
+        # 🔥 移除时间间隔检查，让前端倒计时控制请求频率
+        # 注释掉原有的冷却时间检查逻辑
+        # if self.last_verification_time:
+        #     from datetime import datetime, timezone, timedelta
+        #     now = datetime.now(timezone.utc)
+        #     time_diff = (now - self.last_verification_time).total_seconds()
+        #     if time_diff < self.verification_interval:
+        #         return False
                 
         return True

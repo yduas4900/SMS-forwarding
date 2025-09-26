@@ -541,11 +541,12 @@ async def get_verification_codes(
                 detail="链接不存在"
             )
         
-        # 检查是否允许获取验证码
-        if not link.is_verification_allowed():
+        # 🔥 修复：移除API级别的冷却限制，让前端倒计时控制请求频率
+        # 只检查次数限制，不检查冷却时间
+        if link.verification_count >= link.max_verification_count:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="验证码获取次数已达上限或冷却时间未到"
+                detail="验证码获取次数已达上限"
             )
         
         # 导入短信规则匹配函数
@@ -620,9 +621,7 @@ async def get_verification_codes(
                 "count": len(sms_data),
                 "verification_count": link.verification_count,
                 "max_verification_count": link.max_verification_count,
-                "next_allowed_time": (
-                    link.last_verification_time + timedelta(seconds=10)  # 使用固定的10秒间隔
-                ).isoformat() if link.last_verification_time else None,
+                "next_allowed_time": None,  # 🔥 移除冷却时间限制，由前端控制
                 "rules_applied": len(active_rules) > 0
             }
         }
