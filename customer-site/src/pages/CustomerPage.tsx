@@ -252,7 +252,7 @@ const CustomerPage: React.FC = () => {
     }
   };
 
-  // 🔥 修复后的渐进式获取核心函数
+  // 🔥 彻底修复的渐进式获取核心函数
   const startProgressiveRetrieval = (totalCount: number, waitTime: number) => {
     let currentIndex = 0;
     const retrievedSmsIds = new Set<number>(); // 用于去重
@@ -261,41 +261,31 @@ const CustomerPage: React.FC = () => {
       clearInterval(intervalRef.current);
     }
     
-    // 🔥 关键修正：刷新按钮倒计时 = 最后一条短信的倒计时时间
+    // 🔥 修复：总倒计时 = 总条数 * 等待时间
     const totalCountdown = totalCount * waitTime;
     setCountdown(totalCountdown);
     
     message.info(`开始获取 ${totalCount} 条短信，每条间隔 ${waitTime} 秒`);
     
-    // 🔥 修复：立即获取第一条短信，并为其设置倒计时
-    fetchSingleSms(currentIndex + 1, retrievedSmsIds, totalCount, waitTime);
-    currentIndex++;
+    // 🔥 重要修复：不要立即获取第一条短信，等倒计时结束
+    console.log(`⏰ 开始倒计时 ${totalCountdown} 秒，第一条短信将在 ${waitTime} 秒后获取`);
     
-    // 🔥 修复：如果只有1条短信，直接结束
-    if (totalCount === 1) {
-      setTimeout(() => {
-        setCountdown(0);
-        message.success(`获取完成，共获取 1 条短信`);
-      }, 1000);
-      return;
-    }
-    
-    // 设置定时器获取后续短信 - 每waitTime秒获取一条
-    let nextFetchTime = waitTime;
-    
+    // 设置定时器 - 每秒更新倒计时
     intervalRef.current = setInterval(() => {
       setCountdown(prev => {
         const newCountdown = prev - 1;
         
-        // 🔥 修复：每waitTime秒获取一条短信
-        if (newCountdown === totalCountdown - nextFetchTime && currentIndex < totalCount) {
+        // 🔥 修复：每waitTime秒获取一条短信（倒计时结束时获取）
+        const elapsedTime = totalCountdown - newCountdown;
+        const shouldFetchIndex = Math.floor(elapsedTime / waitTime);
+        
+        if (shouldFetchIndex > currentIndex && currentIndex < totalCount) {
           fetchSingleSms(currentIndex + 1, retrievedSmsIds, totalCount, waitTime);
           currentIndex++;
-          nextFetchTime += waitTime;
-          console.log(`⏰ 第 ${currentIndex} 条短信获取时机到达，剩余倒计时: ${newCountdown}s`);
+          console.log(`⏰ 第 ${currentIndex} 条短信倒计时结束，开始获取，剩余倒计时: ${newCountdown}s`);
         }
         
-        // 倒计时结束
+        // 总倒计时结束
         if (newCountdown <= 0) {
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
