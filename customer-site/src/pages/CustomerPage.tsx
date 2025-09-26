@@ -106,6 +106,9 @@ const CustomerPage: React.FC = () => {
         setAccessDenied(false);
         setError(null);
         setLastRefresh(new Date());
+        
+        // 🔥 新增：页面加载时自动获取已有的短信
+        await fetchExistingSms();
       } else {
         if (response.data.error === 'access_limit_exceeded') {
           setAccessDenied(true);
@@ -129,6 +132,46 @@ const CustomerPage: React.FC = () => {
     }
   };
 
+  // 🔥 新增：获取已有短信（不增加验证码获取次数）
+  const fetchExistingSms = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/get_existing_sms`, {
+        params: { link_id: currentLinkId }
+      });
+      
+      console.log('已有短信API响应:', response.data);
+      
+      if (response.data.success) {
+        const responseData = response.data.data;
+        
+        if (responseData.all_matched_sms && responseData.all_matched_sms.length > 0) {
+          // 将匹配的短信转换为验证码格式
+          const existingCodes = responseData.all_matched_sms.map((sms: any, index: number) => {
+            const extractedCode = extractVerificationCode(sms.content);
+            return {
+              id: sms.id || index,
+              code: extractedCode || sms.content, // 如果没有验证码就显示完整内容
+              received_at: sms.sms_timestamp || new Date().toISOString(),
+              is_used: false,
+              full_content: sms.content, // 保存完整内容
+              sender: sms.sender
+            };
+          });
+          
+          setAccountInfo(prev => prev ? {
+            ...prev,
+            verification_codes: existingCodes
+          } : null);
+          
+          console.log(`页面加载时获取到 ${existingCodes.length} 条已有短信`);
+        }
+      }
+    } catch (error: any) {
+      console.error('获取已有短信失败:', error);
+      // 不显示错误消息，因为这是后台获取
+    }
+  };
+
   // 复制到剪贴板
   const copyToClipboard = async (text: string, type: string) => {
     try {
@@ -140,14 +183,14 @@ const CustomerPage: React.FC = () => {
     }
   };
 
-  // 获取验证码（实现验证码等待时间功能）
+  // 🔥 新的渐进式短信获取机制
   const getVerificationCodes = async () => {
     if (countdown > 0) return;
     
     try {
       setLoading(true);
       
-      // 首先获取链接配置信息
+      // 首先获取链接配置信息和短信规则
       const accountResponse = await axios.get(`${API_BASE_URL}/api/get_account_info`, {
         params: { link_id: currentLinkId }
       });
@@ -158,39 +201,136 @@ const CustomerPage: React.FC = () => {
       }
       
       const linkData = accountResponse.data.data.link_info;
-      const waitTime = linkData.verification_wait_time || 0;
+      const waitTime = linkData.verification_wait_time || 10; // 默认10秒
       
-      // 如果配置了等待时间，先显示等待倒计时
-      if (waitTime > 0) {
-        message.info(`正在等待 ${waitTime} 秒以确保获取最新验证码...`);
-        setCountdown(waitTime);
-        
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-        }
-        
-        intervalRef.current = setInterval(() => {
-          setCountdown(prev => {
-            if (prev <= 1) {
-              if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-              }
-              // 等待时间结束后，获取验证码
-              fetchVerificationCode();
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-      } else {
-        // 没有等待时间，直接获取验证码
-        await fetchVerificationCode();
+      // 获取短信规则中的显示条数
+      const smsRulesResponse = await axios.get(`${API_BASE_URL}/api/sms_rules`, {
+        params: { account_id: accountResponse.data.data.account_info.id }
+      });
+      
+      let displayCount = 5; // 默认显示5条
+      if (smsRulesResponse.data.success && smsRulesResponse.data.data.length > 0) {
+        // 取第一个规则的显示条数
+        displayCount = smsRulesResponse.data.data[0].display_count || 5;
       }
+      
+      console.log(`开始渐进式获取 ${displayCount} 条短信，每条间隔 ${waitTime} 秒`);
+      
+      // 🔥 关键修正：刷新按钮倒计时 = 最后一条短信的倒计时时间
+      const totalCountdown = displayCount * waitTime;
+      setCountdown(totalCountdown);
+      
+      message.info(`开始获取 ${displayCount} 条短信，预计需要 ${totalCountdown} 秒`);
+      
+      // 清空现有的验证码
+      setAccountInfo(prev => prev ? {
+        ...prev,
+        verification_codes: []
+      } : null);
+      
+      // 启动渐进式获取
+      startProgressiveRetrieval(displayCount, waitTime);
+      
     } catch (error: any) {
       console.error('获取验证码失败:', error);
       message.error('获取验证码失败');
-    } finally {
       setLoading(false);
+    }
+  };
+
+  // 🔥 渐进式获取短信的核心函数
+  const startProgressiveRetrieval = (totalCount: number, waitTime: number) => {
+    let currentIndex = 0;
+    const retrievedSmsIds = new Set<number>(); // 用于去重
+    
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+    
+    // 立即获取第一条短信
+    fetchSingleSms(currentIndex + 1, retrievedSmsIds);
+    currentIndex++;
+    
+    // 设置定时器获取后续短信
+    intervalRef.current = setInterval(() => {
+      setCountdown(prev => {
+        const newCountdown = prev - 1;
+        
+        // 检查是否到了获取下一条短信的时间
+        const elapsedTime = (totalCount * waitTime) - newCountdown;
+        const shouldFetchIndex = Math.floor(elapsedTime / waitTime);
+        
+        if (shouldFetchIndex > currentIndex && currentIndex < totalCount) {
+          fetchSingleSms(currentIndex + 1, retrievedSmsIds);
+          currentIndex++;
+        }
+        
+        // 倒计时结束
+        if (newCountdown <= 0) {
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+          }
+          setLoading(false);
+          message.success(`渐进式获取完成，共获取 ${currentIndex} 条短信`);
+          return 0;
+        }
+        
+        return newCountdown;
+      });
+    }, 1000);
+  };
+
+  // 🔥 获取单条短信（带去重）
+  const fetchSingleSms = async (index: number, retrievedSmsIds: Set<number>) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/get_verification_code`, {
+        params: { 
+          link_id: currentLinkId,
+          progressive_index: index // 传递索引用于后端处理
+        }
+      });
+      
+      console.log(`获取第 ${index} 条短信:`, response.data);
+      
+      if (response.data.success) {
+        const responseData = response.data.data;
+        
+        if (responseData.all_matched_sms && responseData.all_matched_sms.length > 0) {
+          // 过滤掉已经获取过的短信
+          const newSms = responseData.all_matched_sms.filter((sms: any) => 
+            !retrievedSmsIds.has(sms.id)
+          );
+          
+          if (newSms.length > 0) {
+            // 只取最新的一条（避免重复）
+            const latestSms = newSms[0];
+            retrievedSmsIds.add(latestSms.id);
+            
+            const extractedCode = extractVerificationCode(latestSms.content);
+            const newCode = {
+              id: latestSms.id,
+              code: extractedCode || latestSms.content,
+              received_at: latestSms.sms_timestamp || new Date().toISOString(),
+              is_used: false,
+              full_content: latestSms.content,
+              sender: latestSms.sender,
+              progressive_index: index // 标记获取顺序
+            };
+            
+            // 添加到验证码列表
+            setAccountInfo(prev => prev ? {
+              ...prev,
+              verification_codes: [...(prev.verification_codes || []), newCode]
+            } : null);
+            
+            console.log(`✅ 第 ${index} 条短信获取成功: ${newCode.code}`);
+          } else {
+            console.log(`⚠️ 第 ${index} 条短信已存在，跳过`);
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error(`获取第 ${index} 条短信失败:`, error);
     }
   };
 
@@ -201,35 +341,66 @@ const CustomerPage: React.FC = () => {
         params: { link_id: currentLinkId }
       });
       
+      console.log('验证码API响应:', response.data);
+      
       if (response.data.success) {
-        // 更新账号信息中的验证码
-        if (accountInfo && response.data.data.all_matched_sms) {
-          const newCodes = response.data.data.all_matched_sms.map((sms: any, index: number) => ({
-            id: sms.id || index,
-            code: extractVerificationCode(sms.content) || sms.content.substring(0, 20) + '...',
-            received_at: sms.sms_timestamp || new Date().toISOString(),
-            is_used: false
-          }));
+        // 🔥 修复：正确处理API响应数据
+        const responseData = response.data.data;
+        
+        if (responseData.all_matched_sms && responseData.all_matched_sms.length > 0) {
+          // 将匹配的短信转换为验证码格式
+          const newCodes = responseData.all_matched_sms.map((sms: any, index: number) => {
+            const extractedCode = extractVerificationCode(sms.content);
+            return {
+              id: sms.id || index,
+              code: extractedCode || sms.content, // 如果没有验证码就显示完整内容
+              received_at: sms.sms_timestamp || new Date().toISOString(),
+              is_used: false,
+              full_content: sms.content, // 保存完整内容
+              sender: sms.sender
+            };
+          });
           
           setAccountInfo(prev => prev ? {
             ...prev,
             verification_codes: newCodes
           } : null);
+          
+          message.success(`获取到 ${newCodes.length} 条匹配的短信`);
+        } else if (responseData.verification_code || responseData.content) {
+          // 处理单条短信的情况
+          const newCode = {
+            id: Date.now(),
+            code: responseData.verification_code || responseData.content,
+            received_at: responseData.sms_timestamp || new Date().toISOString(),
+            is_used: false,
+            full_content: responseData.content,
+            sender: responseData.sender
+          };
+          
+          setAccountInfo(prev => prev ? {
+            ...prev,
+            verification_codes: [newCode]
+          } : null);
+          
+          message.success('验证码获取成功');
+        } else {
+          message.warning('未找到匹配的短信内容');
         }
         
-        message.success('验证码获取成功');
         setLastRefresh(new Date());
       } else {
         message.warning(response.data.message || '暂无新的验证码');
       }
     } catch (error: any) {
+      console.error('获取验证码失败:', error);
       if (error.response?.status === 429) {
         const retryAfter = error.response.headers['retry-after'];
         message.warning(`请等待 ${retryAfter} 秒后再试`);
       } else if (error.response?.status === 403) {
         message.error('验证码获取次数已达上限');
       } else {
-        message.error('获取验证码失败');
+        message.error('获取验证码失败: ' + (error.response?.data?.detail || error.message));
       }
     }
   };
