@@ -178,6 +178,134 @@ async def get_account_info_alias(
     return await get_account_info(link_id, request, db)
 
 
+@app.get("/api/get_verification_code", tags=["需求文档兼容"])
+async def get_verification_code_alias(
+    request: Request,
+    link_id: str = Query(..., description="链接ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    需求文档要求的API路径: GET /api/get_verification_code
+    获取验证码信息
+    """
+    try:
+        from .api.links import get_verification_codes
+        
+        # 调用链接管理中的验证码获取函数
+        result = await get_verification_codes(link_id, request, db)
+        
+        # 转换为前端期望的格式
+        if result.get("success"):
+            sms_list = result["data"]["sms_list"]
+            
+            # 转换为前端期望的all_matched_sms格式
+            all_matched_sms = []
+            for sms in sms_list:
+                all_matched_sms.append({
+                    "id": hash(sms["content"] + sms["timestamp"]),  # 生成唯一ID
+                    "content": sms["content"],
+                    "sender": sms["sender"],
+                    "sms_timestamp": sms["timestamp"],
+                    "category": sms.get("category", "verification")
+                })
+            
+            return {
+                "success": True,
+                "data": {
+                    "all_matched_sms": all_matched_sms,
+                    "count": len(all_matched_sms)
+                }
+            }
+        else:
+            return result
+            
+    except Exception as e:
+        logger.error(f"获取验证码失败: {str(e)}")
+        return {
+            "success": False,
+            "message": "获取验证码失败",
+            "data": {
+                "all_matched_sms": [],
+                "count": 0
+            }
+        }
+
+
+@app.get("/api/sms_rules", tags=["需求文档兼容"])
+async def get_sms_rules_alias(
+    account_id: int = Query(..., description="账号ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    需求文档要求的API路径: GET /api/sms_rules
+    获取短信规则信息
+    """
+    try:
+        from .models.sms_rule import SMSRule
+        from .models.account import Account
+        from sqlalchemy import and_
+        
+        # 首先验证账号是否存在
+        account = db.query(Account).filter(Account.id == account_id).first()
+        if not account:
+            return {
+                "success": False,
+                "message": "账号不存在",
+                "data": []
+            }
+        
+        # 获取该账号关联设备的短信规则
+        # 通过账号找到设备，再找到设备的短信规则
+        from .models.device import Device
+        from .models.account_link import AccountLink
+        
+        # 找到该账号的设备
+        account_links = db.query(AccountLink).filter(AccountLink.account_id == account_id).all()
+        device_ids = [link.device_id for link in account_links]
+        
+        if not device_ids:
+            return {
+                "success": True,
+                "message": "该账号暂无关联设备",
+                "data": []
+            }
+        
+        # 获取这些设备的短信规则
+        sms_rules = db.query(SMSRule).filter(
+            and_(
+                SMSRule.device_id.in_(device_ids),
+                SMSRule.is_active == True
+            )
+        ).all()
+        
+        # 转换为前端期望的格式
+        rules_data = []
+        for rule in sms_rules:
+            rules_data.append({
+                "id": rule.id,
+                "rule_name": rule.rule_name,
+                "display_count": rule.display_count or 1,  # 默认显示1条
+                "sender_pattern": rule.sender_pattern,
+                "content_pattern": rule.content_pattern,
+                "is_active": rule.is_active,
+                "priority": rule.priority
+            })
+        
+        return {
+            "success": True,
+            "message": f"获取到 {len(rules_data)} 条短信规则",
+            "data": rules_data
+        }
+        
+    except Exception as e:
+        logger.error(f"获取短信规则失败: {str(e)}")
+        return {
+            "success": False,
+            "message": "获取短信规则失败",
+            "data": []
+        }
+
+
 # 前端路由处理 - 捕获所有非API路由
 @app.get("/")
 @app.get("/login")
