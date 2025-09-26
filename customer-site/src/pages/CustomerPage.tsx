@@ -59,6 +59,7 @@ interface LinkInfo {
   access_count: number;
   max_access_count: number;
   max_verification_count: number;
+  verification_count?: number;  // 🔥 新增：服务器端的真实验证码获取次数
   access_session_interval?: number;
   verification_wait_time?: number;
   created_at: string;
@@ -645,10 +646,21 @@ const CustomerPage: React.FC = () => {
                     size="small"
                     icon={<CheckCircleOutlined />}
                     onClick={startProgressiveRetrieval}
-                    disabled={progressiveRetrievalState.isActive}
+                    disabled={
+                      progressiveRetrievalState.isActive || 
+                      (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count)
+                    }
                     loading={loading}
+                    style={{
+                      opacity: (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count) ? 0.5 : 1
+                    }}
                   >
-                    {progressiveRetrievalState.isActive ? '获取中...' : '获取验证码'}
+                    {progressiveRetrievalState.isActive 
+                      ? '获取中...' 
+                      : (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count)
+                        ? '已达上限'
+                        : '获取验证码'
+                    }
                   </Button>
                 </div>
               </div>
@@ -887,31 +899,38 @@ const CustomerPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* 验证码获取次数统计 */}
+                {/* 验证码获取次数统计 - 🔥 修复：使用服务器端的真实次数 */}
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                     <Text strong style={{ color: '#666' }}>验证码获取次数</Text>
                     <Text 
                       style={{ 
-                        color: (accountInfo?.verification_codes?.length || 0) >= linkInfo.max_verification_count ? '#ff4d4f' : '#52c41a',
+                        color: (linkInfo.verification_count || 0) >= linkInfo.max_verification_count ? '#ff4d4f' : '#52c41a',
                         fontWeight: 'bold'
                       }}
                     >
-                      {accountInfo?.verification_codes?.length || 0} / {linkInfo.max_verification_count}
+                      {linkInfo.verification_count || 0} / {linkInfo.max_verification_count}
                     </Text>
                   </div>
                   <Progress
-                    percent={Math.round(((accountInfo?.verification_codes?.length || 0) / linkInfo.max_verification_count) * 100)}
+                    percent={Math.round(((linkInfo.verification_count || 0) / linkInfo.max_verification_count) * 100)}
                     size="small"
                     strokeColor={
-                      (accountInfo?.verification_codes?.length || 0) >= linkInfo.max_verification_count ? '#ff4d4f' : '#52c41a'
+                      (linkInfo.verification_count || 0) >= linkInfo.max_verification_count ? '#ff4d4f' : '#52c41a'
                     }
                     trailColor="#f0f0f0"
                   />
-                  {(accountInfo?.verification_codes?.length || 0) >= linkInfo.max_verification_count && (
+                  {(linkInfo.verification_count || 0) >= linkInfo.max_verification_count && (
                     <Alert
-                      message="验证码获取次数已达上限"
-                      description="已达到最大验证码获取次数，无法继续获取新的验证码"
+                      message="🚫 验证码获取次数已达上限"
+                      description={
+                        <div>
+                          <p style={{ margin: 0, marginBottom: 8 }}>您已达到最大验证码获取次数限制。</p>
+                          <p style={{ margin: 0, color: '#1890ff', fontWeight: 'bold' }}>
+                            📞 如需继续使用，请联系管理员重置次数限制
+                          </p>
+                        </div>
+                      }
                       type="error"
                       size="small"
                       style={{ marginTop: 8 }}
