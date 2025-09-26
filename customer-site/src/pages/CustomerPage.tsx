@@ -72,6 +72,14 @@ const CustomerPage: React.FC = () => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const [smsCountdowns, setSmsCountdowns] = useState<{[key: number]: number}>({});
   const smsIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // 🔥 新增：占位框状态管理
+  const [placeholderBoxes, setPlaceholderBoxes] = useState<Array<{
+    index: number;
+    status: 'waiting' | 'fetching' | 'completed';
+    countdown: number;
+    message: string;
+  }>>([]);
 
   // 获取链接ID（从URL参数或查询参数）
   const currentLinkId = linkId || searchParams.get('link_id');
@@ -252,7 +260,7 @@ const CustomerPage: React.FC = () => {
     }
   };
 
-  // 🔥 彻底修复的渐进式获取核心函数
+  // 🔥 彻底修复的渐进式获取核心函数 - 立即显示占位框
   const startProgressiveRetrieval = (totalCount: number, waitTime: number) => {
     let currentIndex = 0;
     const retrievedSmsIds = new Set<number>(); // 用于去重
@@ -267,10 +275,18 @@ const CustomerPage: React.FC = () => {
     
     message.info(`开始获取 ${totalCount} 条短信，每条间隔 ${waitTime} 秒`);
     
-    // 🔥 重要修复：不要立即获取第一条短信，等倒计时结束
-    console.log(`⏰ 开始倒计时 ${totalCountdown} 秒，第一条短信将在 ${waitTime} 秒后获取`);
+    // 🔥 关键修复：立即创建占位框显示倒计时状态
+    const initialPlaceholders = Array.from({ length: totalCount }, (_, index) => ({
+      index: index + 1,
+      status: 'waiting' as const,
+      countdown: (index + 1) * waitTime,
+      message: `等待获取第 ${index + 1} 条短信`
+    }));
+    setPlaceholderBoxes(initialPlaceholders);
     
-    // 设置定时器 - 每秒更新倒计时
+    console.log(`⏰ 立即显示 ${totalCount} 个占位框，开始倒计时`);
+    
+    // 设置定时器 - 每秒更新倒计时和占位框状态
     intervalRef.current = setInterval(() => {
       setCountdown(prev => {
         const newCountdown = prev - 1;
@@ -280,10 +296,23 @@ const CustomerPage: React.FC = () => {
         const shouldFetchIndex = Math.floor(elapsedTime / waitTime);
         
         if (shouldFetchIndex > currentIndex && currentIndex < totalCount) {
+          // 更新占位框状态为"正在获取"
+          setPlaceholderBoxes(prev => prev.map(box => 
+            box.index === currentIndex + 1 
+              ? { ...box, status: 'fetching', message: `正在获取第 ${currentIndex + 1} 条短信...` }
+              : box
+          ));
+          
           fetchSingleSms(currentIndex + 1, retrievedSmsIds, totalCount, waitTime);
           currentIndex++;
           console.log(`⏰ 第 ${currentIndex} 条短信倒计时结束，开始获取，剩余倒计时: ${newCountdown}s`);
         }
+        
+        // 更新占位框倒计时
+        setPlaceholderBoxes(prev => prev.map(box => ({
+          ...box,
+          countdown: Math.max(0, box.countdown - 1)
+        })));
         
         // 总倒计时结束
         if (newCountdown <= 0) {
@@ -291,6 +320,8 @@ const CustomerPage: React.FC = () => {
             clearInterval(intervalRef.current);
           }
           message.success(`渐进式获取完成，共获取 ${currentIndex} 条短信`);
+          // 清空占位框
+          setPlaceholderBoxes([]);
           return 0;
         }
         
@@ -652,7 +683,147 @@ const CustomerPage: React.FC = () => {
               boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
             }}
           >
-            {accountInfo.verification_codes && accountInfo.verification_codes.length > 0 ? (
+            {/* 🔥 优先显示占位框，然后显示验证码 */}
+            {placeholderBoxes.length > 0 ? (
+              <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                {placeholderBoxes.map((box) => (
+                  <Card
+                    key={`placeholder-${box.index}`}
+                    size="small"
+                    style={{
+                      background: box.status === 'waiting' ? '#fff7e6' : 
+                                 box.status === 'fetching' ? '#e6f7ff' : '#f6ffed',
+                      border: `1px solid ${
+                        box.status === 'waiting' ? '#ffd666' : 
+                        box.status === 'fetching' ? '#91d5ff' : '#b7eb8f'
+                      }`,
+                      borderRadius: 8
+                    }}
+                  >
+                    <Row align="middle" justify="space-between">
+                      <Col flex="auto">
+                        <Space direction="vertical" size={4}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Text strong style={{ fontSize: 16, color: '#666' }}>
+                              {box.message}
+                            </Text>
+                            <Tag 
+                              color={
+                                box.status === 'waiting' ? 'orange' : 
+                                box.status === 'fetching' ? 'blue' : 'green'
+                              } 
+                              size="small"
+                            >
+                              {box.status === 'waiting' ? `倒计时 ${box.countdown}s` :
+                               box.status === 'fetching' ? '获取中...' : '已完成'}
+                            </Tag>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <ClockCircleOutlined style={{ color: '#faad14' }} />
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              第 {box.index} 条短信
+                            </Text>
+                            {box.status === 'waiting' && (
+                              <Progress 
+                                percent={Math.max(0, 100 - (box.countdown / (box.index * 10)) * 100)} 
+                                size="small" 
+                                style={{ width: 100 }}
+                                strokeColor="#faad14"
+                              />
+                            )}
+                          </div>
+                        </Space>
+                      </Col>
+                      <Col>
+                        {box.status === 'fetching' && (
+                          <Spin size="small" />
+                        )}
+                      </Col>
+                    </Row>
+                  </Card>
+                ))}
+                
+                {/* 🔥 在占位框下方显示已获取的验证码 */}
+                {accountInfo.verification_codes && accountInfo.verification_codes.length > 0 && (
+                  <>
+                    <Divider orientation="left" style={{ margin: '16px 0' }}>
+                      <Text type="secondary">已获取的验证码</Text>
+                    </Divider>
+                    {accountInfo.verification_codes
+                      .sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime())
+                      .map((code) => {
+                        const freshness = getCodeFreshness(code.received_at);
+                        return (
+                          <Card
+                            key={code.id}
+                            size="small"
+                            style={{
+                              background: code.is_used ? '#f5f5f5' : '#fff',
+                              border: `1px solid ${code.is_used ? '#d9d9d9' : '#1890ff'}`,
+                              borderRadius: 8
+                            }}
+                          >
+                            <Row align="middle" justify="space-between">
+                              <Col flex="auto">
+                                <Space direction="vertical" size={4}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <Text
+                                      strong
+                                      style={{
+                                        fontSize: 18,
+                                        fontFamily: 'monospace',
+                                        color: code.is_used ? '#999' : '#1890ff'
+                                      }}
+                                    >
+                                      {code.code}
+                                    </Text>
+                                    {code.is_used && (
+                                      <Tag color="default" size="small">已使用</Tag>
+                                    )}
+                                    {/* 🔥 显示短信倒计时 */}
+                                    {smsCountdowns[code.id] > 0 && (
+                                      <Tag color="orange" size="small">
+                                        倒计时 {smsCountdowns[code.id]}s
+                                      </Tag>
+                                    )}
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <ClockCircleOutlined style={{ color: freshness.color }} />
+                                    <Text type="secondary" style={{ fontSize: 12 }}>
+                                      {formatTime(code.received_at)}
+                                    </Text>
+                                    <Tag color={freshness.color} size="small">
+                                      {freshness.text}
+                                    </Tag>
+                                    {/* 🔥 显示获取顺序 */}
+                                    {code.progressive_index && (
+                                      <Tag color="blue" size="small">
+                                        第{code.progressive_index}条
+                                      </Tag>
+                                    )}
+                                  </div>
+                                </Space>
+                              </Col>
+                              <Col>
+                                <Button
+                                  type="primary"
+                                  ghost
+                                  icon={<CopyOutlined />}
+                                  size="small"
+                                  onClick={() => copyToClipboard(code.code, '验证码')}
+                                  disabled={code.is_used}
+                                >
+                                  复制
+                                </Button>
+                              </Col>
+                            </Row>
+                          </Card>
+                        );
+                      })}
+                  </>
+                )}
+              </Space>
+            ) : accountInfo.verification_codes && accountInfo.verification_codes.length > 0 ? (
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 {accountInfo.verification_codes
                   .sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime())
