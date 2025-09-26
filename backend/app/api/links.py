@@ -370,9 +370,88 @@ async def delete_link(
         )
 
 
+# 为了兼容需求文档，添加一个新的函数
+async def get_account_info(
+    link_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    客户通过链接获取账号信息 (兼容需求文档的API)
+    Get account info through link (compatible with requirements doc API)
+    """
+    try:
+        link = db.query(AccountLink).filter(AccountLink.link_id == link_id).first()
+        
+        if not link:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="链接不存在"
+            )
+        
+        # 检查链接是否可访问
+        if not link.is_access_allowed():
+            return {
+                "success": False,
+                "error": "access_limit_exceeded",
+                "message": "链接已过期或访问次数已达上限",
+                "link_info": {
+                    "id": link.id,
+                    "link_id": link.link_id,
+                    "access_count": link.access_count,
+                    "max_access_count": link.max_access_count,
+                    "created_at": link.created_at.isoformat() if link.created_at else None
+                }
+            }
+        
+        # 更新访问统计
+        link.access_count += 1
+        link.last_access_time = datetime.now(timezone.utc)
+        link.last_ip = request.client.host if request.client else "unknown"
+        link.last_user_agent = request.headers.get("user-agent", "")
+        
+        # 更新链接状态
+        if link.status == "unused":
+            link.status = "used"
+        
+        db.commit()
+        
+        # 返回账号信息 - 按照前端期望的数据结构
+        return {
+            "success": True,
+            "data": {
+                "account_info": {
+                    "id": link.account.id,
+                    "account_name": link.account.account_name,
+                    "username": link.account.username,
+                    "password": link.account.password,
+                    "type": link.account.type,
+                    "image_url": link.account.image_url,
+                    "verification_codes": []  # 初始为空，需要单独获取
+                },
+                "link_info": {
+                    "id": link.id,
+                    "link_id": link.link_id,
+                    "access_count": link.access_count,
+                    "max_access_count": link.max_access_count,
+                    "created_at": link.created_at.isoformat() if link.created_at else None
+                }
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取账号信息失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="获取账号信息失败"
+        )
+
+
 # 客户端访问API (不需要认证)
 @router.get("/public/{link_id}/info")
-async def get_account_info(
+async def get_public_account_info(
     link_id: str,
     request: Request,
     db: Session = Depends(get_db)
