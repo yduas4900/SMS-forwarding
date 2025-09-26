@@ -229,19 +229,24 @@ const CustomerPage: React.FC = () => {
           params: { account_id: accountResponse.data.data.account_info.id }
         });
         
-        console.log('🔍 短信规则API响应:', smsRulesResponse.data);
+        console.log('🔍 短信规则API完整响应:', JSON.stringify(smsRulesResponse.data, null, 2));
         
-        if (smsRulesResponse.data.success && smsRulesResponse.data.data.length > 0) {
+        if (smsRulesResponse.data.success && smsRulesResponse.data.data && smsRulesResponse.data.data.length > 0) {
           // 🔥 关键修复：使用数据库中的真实显示条数
-          const realDisplayCount = smsRulesResponse.data.data[0].display_count;
+          const firstRule = smsRulesResponse.data.data[0];
+          const realDisplayCount = firstRule.display_count;
           displayCount = realDisplayCount;
-          console.log(`✅ 从数据库获取真实显示条数: ${displayCount} (绝不硬编码！)`);
+          console.log(`✅ 从数据库获取真实显示条数: ${displayCount} (规则: ${firstRule.rule_name})`);
+          console.log(`🔍 规则详情:`, JSON.stringify(firstRule, null, 2));
         } else {
+          console.error('❌ 短信规则API返回空数据或失败');
+          console.log('📋 API响应详情:', smsRulesResponse.data);
           console.log('⚠️ 未找到短信规则，使用默认显示条数: 1');
           displayCount = 1;
         }
       } catch (error) {
         console.error('❌ 获取短信规则失败:', error);
+        console.error('❌ 错误详情:', error.response?.data);
         console.log('⚠️ 短信规则API失败，使用默认显示条数: 1');
         displayCount = 1;
       }
