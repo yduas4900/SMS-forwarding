@@ -60,29 +60,34 @@ def init_default_data():
     初始化默认数据
     Initialize default data
     """
+    from passlib.context import CryptContext
+    from .models.user import User
+    
+    # 创建密码加密上下文
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    
     db = SessionLocal()
     try:
         # 检查是否已有管理员用户
-        result = db.execute(text("SELECT COUNT(*) FROM users WHERE username = 'admin'"))
-        admin_count = result.scalar()
+        admin_user = db.query(User).filter(User.username == 'admin').first()
         
-        if admin_count == 0:
+        if not admin_user:
             logger.info("创建默认管理员用户...")
-            # 创建默认管理员用户 (密码: admin123)
-            db.execute(text("""
-                INSERT INTO users (username, email, hashed_password, is_active, is_superuser, full_name, created_at, updated_at)
-                VALUES (
-                    'admin',
-                    'admin@xianyu.com',
-                    '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW',
-                    true,
-                    true,
-                    '系统管理员',
-                    NOW(),
-                    NOW()
-                )
-            """))
-            logger.info("默认管理员用户创建成功")
+            # 生成admin123的正确哈希
+            hashed_password = pwd_context.hash("admin123")
+            
+            # 创建默认管理员用户
+            admin_user = User(
+                username='admin',
+                email='admin@sms-forwarding.com',
+                hashed_password=hashed_password,
+                is_active=True,
+                is_superuser=True,
+                full_name='系统管理员'
+            )
+            
+            db.add(admin_user)
+            logger.info("默认管理员用户创建成功 (用户名: admin, 密码: admin123)")
         else:
             logger.info("管理员用户已存在，跳过创建")
         
