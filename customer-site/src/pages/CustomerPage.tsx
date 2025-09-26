@@ -89,7 +89,28 @@ interface SmsSlot {
 const CustomerPage: React.FC = () => {
   const { linkId } = useParams<{ linkId: string }>();
   const [searchParams] = useSearchParams();
-  const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
+  // 🔥 支持页面刷新时保持已获取的短信
+  const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(() => {
+    // 页面加载时从sessionStorage恢复已获取的短信
+    try {
+      const savedSms = sessionStorage.getItem('savedVerificationCodes');
+      if (savedSms) {
+        const parsedSms = JSON.parse(savedSms);
+        console.log('🔄 从sessionStorage恢复已获取的短信:', parsedSms);
+        return {
+          id: 0, // 临时ID，会在fetchAccountInfo时更新
+          account_name: '',
+          username: '',
+          password: '',
+          service_type: '',
+          verification_codes: parsedSms
+        };
+      }
+    } catch (error) {
+      console.error('❌ 恢复已获取短信失败:', error);
+    }
+    return null;
+  });
   const [linkInfo, setLinkInfo] = useState<LinkInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -97,16 +118,34 @@ const CustomerPage: React.FC = () => {
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   
   // 🔥 新增：渐进式获取短信的状态 - 每条短信独立倒计时
+  // 🔥 支持页面刷新时保持状态
   const [progressiveRetrievalState, setProgressiveRetrievalState] = useState<{
     isActive: boolean;
     totalCount: number;
     smsSlots: SmsSlot[];
     retrievedSmsIds: Set<number>;
-  }>({
-    isActive: false,
-    totalCount: 0,
-    smsSlots: [],
-    retrievedSmsIds: new Set()
+  }>(() => {
+    // 页面加载时从sessionStorage恢复状态
+    try {
+      const savedState = sessionStorage.getItem('progressiveRetrievalState');
+      if (savedState) {
+        const parsed = JSON.parse(savedState);
+        console.log('🔄 从sessionStorage恢复渐进式获取状态:', parsed);
+        return {
+          ...parsed,
+          retrievedSmsIds: new Set(parsed.retrievedSmsIds || [])
+        };
+      }
+    } catch (error) {
+      console.error('❌ 恢复渐进式获取状态失败:', error);
+    }
+    
+    return {
+      isActive: false,
+      totalCount: 0,
+      smsSlots: [],
+      retrievedSmsIds: new Set()
+    };
   });
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -143,6 +182,19 @@ const CustomerPage: React.FC = () => {
           return;
         }
         
+        // 🔥 合并已保存的短信和新的账号信息
+        const savedSms = sessionStorage.getItem('savedVerificationCodes');
+        let existingCodes: VerificationCode[] = [];
+        
+        if (savedSms) {
+          try {
+            existingCodes = JSON.parse(savedSms);
+            console.log('🔄 合并已保存的短信:', existingCodes.length, '条');
+          } catch (error) {
+            console.error('❌ 解析已保存短信失败:', error);
+          }
+        }
+        
         setAccountInfo({
           id: accountData.id,
           account_name: accountData.account_name,
@@ -150,7 +202,7 @@ const CustomerPage: React.FC = () => {
           password: accountData.password,
           service_type: accountData.type || '未知服务',
           avatar_url: accountData.image_url,
-          verification_codes: accountData.verification_codes || []
+          verification_codes: existingCodes.length > 0 ? existingCodes : (accountData.verification_codes || [])
         });
         
         setLinkInfo(linkData);
@@ -247,6 +299,10 @@ const CustomerPage: React.FC = () => {
         smsSlots: smsSlots,
         retrievedSmsIds: new Set()
       });
+
+      // 🔥 清空sessionStorage中的旧状态，开始新的获取流程
+      sessionStorage.removeItem('progressiveRetrievalState');
+      sessionStorage.removeItem('savedVerificationCodes');
 
       // 清空现有验证码
       setAccountInfo(prev => prev ? {
@@ -530,8 +586,56 @@ const CustomerPage: React.FC = () => {
     return { text: `${diffHours}小时前`, color: '#ff4d4f' };
   };
 
+  // 🔥 保存状态到sessionStorage
+  useEffect(() => {
+    if (progressiveRetrievalState.isActive || progressiveRetrievalState.smsSlots.length > 0) {
+      try {
+        const stateToSave = {
+          ...progressiveRetrievalState,
+          retrievedSmsIds: Array.from(progressiveRetrievalState.retrievedSmsIds)
+        };
+        sessionStorage.setItem('progressiveRetrievalState', JSON.stringify(stateToSave));
+        console.log('💾 保存渐进式获取状态到sessionStorage');
+      } catch (error) {
+        console.error('❌ 保存渐进式获取状态失败:', error);
+      }
+    }
+  }, [progressiveRetrievalState]);
+
+  // 🔥 保存已获取的短信到sessionStorage
+  useEffect(() => {
+    if (accountInfo?.verification_codes && accountInfo.verification_codes.length > 0) {
+      try {
+        sessionStorage.setItem('savedVerificationCodes', JSON.stringify(accountInfo.verification_codes));
+        console.log('💾 保存已获取的短信到sessionStorage:', accountInfo.verification_codes.length, '条');
+      } catch (error) {
+        console.error('❌ 保存已获取短信失败:', error);
+      }
+    }
+  }, [accountInfo?.verification_codes]);
+
+  // 🔥 清空sessionStorage的函数（重新打开页面时调用）
+  const clearSessionStorage = useCallback(() => {
+    try {
+      sessionStorage.removeItem('progressiveRetrievalState');
+      sessionStorage.removeItem('savedVerificationCodes');
+      console.log('🗑️ 清空sessionStorage - 重新打开页面');
+    } catch (error) {
+      console.error('❌ 清空sessionStorage失败:', error);
+    }
+  }, []);
+
   // 组件挂载时获取数据
   useEffect(() => {
+    // 🔥 检查是否是重新打开页面（没有保存的状态）
+    const hasProgressiveState = sessionStorage.getItem('progressiveRetrievalState');
+    const hasSavedSms = sessionStorage.getItem('savedVerificationCodes');
+    
+    if (!hasProgressiveState && !hasSavedSms) {
+      console.log('🆕 重新打开页面 - 清空所有状态');
+      clearSessionStorage();
+    }
+    
     fetchAccountInfo();
     
     return () => {
@@ -539,7 +643,7 @@ const CustomerPage: React.FC = () => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [currentLinkId]);
+  }, [currentLinkId, clearSessionStorage]);
 
   // 在所有return语句中包装ConfigProvider
   if (loading) {
