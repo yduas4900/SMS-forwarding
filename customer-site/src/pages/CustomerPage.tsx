@@ -87,15 +87,38 @@ const CustomerPage: React.FC = () => {
       });
 
       if (response.data.success) {
-        setAccountInfo(response.data.account);
-        setLinkInfo(response.data.link_info);
+        // 适配后端API响应结构，保持原有UI设计
+        const accountData = response.data.data.account_info;
+        const linkData = response.data.data.link_info;
+        
+        // 转换为前端期望的格式，保持原有字段名
+        setAccountInfo({
+          id: accountData.id,
+          account_name: accountData.account_name,
+          username: accountData.username,
+          password: accountData.password,
+          service_type: accountData.type || '未知服务',
+          avatar_url: accountData.image_url,
+          verification_codes: [] // 初始为空，后续通过其他API获取
+        });
+        
+        setLinkInfo({
+          id: linkData.id,
+          link_id: linkData.link_id,
+          access_count: linkData.access_count,
+          max_access_count: linkData.max_access_count,
+          created_at: linkData.created_at
+        });
+        
         setAccessDenied(false);
         setError(null);
         setLastRefresh(new Date());
       } else {
         if (response.data.error === 'access_limit_exceeded') {
           setAccessDenied(true);
-          setLinkInfo(response.data.link_info);
+          if (response.data.link_info) {
+            setLinkInfo(response.data.link_info);
+          }
         } else {
           setError(response.data.message || '获取账号信息失败');
         }
