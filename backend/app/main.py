@@ -314,6 +314,9 @@ async def get_verification_code_alias(
                 "category": sms.category or "verification"
             })
         
+        # 🔥 关键修复：确保返回更新后的验证码次数
+        logger.info(f"🔥 API返回数据: verification_count={link.verification_count}, max_verification_count={link.max_verification_count}")
+        
         return {
             "success": True,
             "data": {
