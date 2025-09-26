@@ -296,10 +296,12 @@ async def get_verification_code_alias(
         for i, sms in enumerate(matched_sms):
             logger.info(f"📱 短信{i+1}: {sms.content[:50]}... (时间: {sms.sms_timestamp})")
         
-        # 🔥 重要：不更新统计，让前端控制
-        # link.verification_count += 1
-        # link.last_verification_time = datetime.now(timezone.utc)
-        # db.commit()
+        # 🔥 修复：更新验证码获取统计，确保次数正确递增
+        link.verification_count += 1
+        link.last_verification_time = datetime.now(timezone.utc)
+        db.commit()
+        
+        logger.info(f"📊 验证码获取次数已更新: {link.verification_count}/{link.max_verification_count}")
         
         # 转换为前端期望的all_matched_sms格式
         all_matched_sms = []
@@ -316,7 +318,9 @@ async def get_verification_code_alias(
             "success": True,
             "data": {
                 "all_matched_sms": all_matched_sms,
-                "count": len(all_matched_sms)
+                "count": len(all_matched_sms),
+                "verification_count": link.verification_count,  # 🔥 返回更新后的次数
+                "max_verification_count": link.max_verification_count
             }
         }
             
