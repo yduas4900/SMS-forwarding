@@ -330,7 +330,7 @@ const CustomerPage: React.FC = () => {
     }, 1000);
   };
 
-  // 🔥 修复后的单条短信获取函数
+  // 🔥 修复后的单条短信获取函数 - 智能获取最新短信
   const fetchSingleSms = async (index: number, retrievedSmsIds: Set<number>, totalCount: number, waitTime: number) => {
     try {
       console.log(`📱 正在获取第 ${index}/${totalCount} 条短信...`);
@@ -338,7 +338,6 @@ const CustomerPage: React.FC = () => {
       const response = await axios.get(`${API_BASE_URL}/api/get_verification_code`, {
         params: { 
           link_id: currentLinkId
-          // 移除 progressive_index 参数，因为后端可能不支持
         }
       });
       
@@ -348,24 +347,34 @@ const CustomerPage: React.FC = () => {
         const responseData = response.data.data;
         
         if (responseData.all_matched_sms && responseData.all_matched_sms.length > 0) {
-          // 过滤掉已经获取过的短信
-          const newSms = responseData.all_matched_sms.filter((sms: any) => 
-            !retrievedSmsIds.has(sms.id)
-          );
+          // 🔥 关键修复：按时间排序，获取最新的未获取短信
+          const sortedSms = responseData.all_matched_sms
+            .sort((a: any, b: any) => {
+              const timeA = new Date(a.sms_timestamp || 0).getTime();
+              const timeB = new Date(b.sms_timestamp || 0).getTime();
+              return timeB - timeA; // 最新的在前
+            });
           
-          if (newSms.length > 0) {
-            // 只取最新的一条（避免重复）
-            const latestSms = newSms[0];
-            retrievedSmsIds.add(latestSms.id);
+          // 🔥 智能选择：优先选择最新的未获取短信
+          let selectedSms = null;
+          for (const sms of sortedSms) {
+            if (!retrievedSmsIds.has(sms.id)) {
+              selectedSms = sms;
+              break; // 找到第一个（最新的）未获取短信
+            }
+          }
+          
+          if (selectedSms) {
+            retrievedSmsIds.add(selectedSms.id);
             
-            const extractedCode = extractVerificationCode(latestSms.content);
+            const extractedCode = extractVerificationCode(selectedSms.content);
             const newCode = {
-              id: latestSms.id,
-              code: extractedCode || latestSms.content,
-              received_at: latestSms.sms_timestamp || new Date().toISOString(),
+              id: selectedSms.id,
+              code: extractedCode || selectedSms.content,
+              received_at: selectedSms.sms_timestamp || new Date().toISOString(),
               is_used: false,
-              full_content: latestSms.content,
-              sender: latestSms.sender,
+              full_content: selectedSms.content,
+              sender: selectedSms.sender,
               progressive_index: index, // 标记获取顺序
               countdown: waitTime // 添加倒计时
             };
@@ -379,26 +388,61 @@ const CustomerPage: React.FC = () => {
             // 🔥 为这条短信启动倒计时
             setSmsCountdowns(prev => ({
               ...prev,
-              [latestSms.id]: waitTime
+              [selectedSms.id]: waitTime
             }));
             
-            console.log(`✅ 第 ${index} 条短信获取成功: ${newCode.code}`);
+            // 🔥 更新占位框状态为已完成
+            setPlaceholderBoxes(prev => prev.map(box => 
+              box.index === index 
+                ? { ...box, status: 'completed', message: `第 ${index} 条短信获取成功` }
+                : box
+            ));
+            
+            console.log(`✅ 第 ${index} 条短信获取成功: ${newCode.code} (时间: ${selectedSms.sms_timestamp})`);
             message.success(`第 ${index} 条短信获取成功: ${newCode.code}`);
           } else {
-            console.log(`⚠️ 第 ${index} 条短信已存在，跳过`);
-            message.info(`第 ${index} 条短信已存在，跳过重复`);
+            console.log(`⚠️ 第 ${index} 条短信：所有短信都已获取过`);
+            message.info(`第 ${index} 条短信：所有短信都已获取过`);
+            
+            // 🔥 更新占位框状态为已完成（但无新短信）
+            setPlaceholderBoxes(prev => prev.map(box => 
+              box.index === index 
+                ? { ...box, status: 'completed', message: `第 ${index} 条短信：无新短信` }
+                : box
+            ));
           }
         } else {
           console.log(`📭 第 ${index} 条短信暂无匹配内容`);
           message.info(`第 ${index} 条短信暂无匹配内容`);
+          
+          // 🔥 更新占位框状态
+          setPlaceholderBoxes(prev => prev.map(box => 
+            box.index === index 
+              ? { ...box, status: 'completed', message: `第 ${index} 条短信：暂无内容` }
+              : box
+          ));
         }
       } else {
         console.log(`❌ 第 ${index} 条短信获取失败:`, response.data.message);
         message.warning(`第 ${index} 条短信获取失败: ${response.data.message}`);
+        
+        // 🔥 更新占位框状态为失败
+        setPlaceholderBoxes(prev => prev.map(box => 
+          box.index === index 
+            ? { ...box, status: 'completed', message: `第 ${index} 条短信获取失败` }
+            : box
+        ));
       }
     } catch (error: any) {
       console.error(`获取第 ${index} 条短信失败:`, error);
       message.error(`第 ${index} 条短信获取失败: ${error.response?.data?.message || error.message}`);
+      
+      // 🔥 更新占位框状态为失败
+      setPlaceholderBoxes(prev => prev.map(box => 
+        box.index === index 
+          ? { ...box, status: 'completed', message: `第 ${index} 条短信获取失败` }
+          : box
+      ));
     }
   };
 
