@@ -108,7 +108,8 @@ async def create_account(
                 f"account_{clean_account_name}"
             )
             if saved_path:
-                processed_image_url = f"http://localhost:8000/api/images/{saved_path.split('/')[-1]}"
+                # 使用相对路径，让前端自动拼接正确的域名
+                processed_image_url = f"/api/images/{saved_path.split('/')[-1]}"
                 logger.info(f"Base64图片已转换为文件存储: {processed_image_url}")
             else:
                 logger.warning("Base64图片转换失败，使用原始数据")
@@ -679,7 +680,8 @@ async def update_account(
                         old_filename = account.image_url.split('/')[-1]
                         image_storage.delete_image(f"uploads/images/{old_filename}")
                     
-                    processed_image_url = f"http://localhost:8000/api/images/{saved_path.split('/')[-1]}"
+                    # 使用相对路径，让前端自动拼接正确的域名
+                    processed_image_url = f"/api/images/{saved_path.split('/')[-1]}"
                     logger.info(f"Base64图片已转换为文件存储: {processed_image_url}")
                 else:
                     logger.warning("Base64图片转换失败，使用原始数据")
