@@ -327,28 +327,72 @@ async def get_sms_rules_alias(
 ):
     """
     需求文档要求的API路径: GET /api/sms_rules
-    获取短信规则信息 - 彻底修复版本
+    获取短信规则信息 - 从数据库获取真实规则
     """
     try:
         logger.info(f"🔍 获取短信规则请求: account_id={account_id}")
         
-        # 🔥 简化：直接返回默认规则，不依赖复杂的数据库查询
-        default_rules = [{
-            "id": 1,
-            "rule_name": "默认验证码规则",
-            "display_count": 1,  # 默认显示1条
-            "sender_pattern": "*",
-            "content_pattern": "验证码|verification|code",
-            "is_active": True,
-            "priority": 1
-        }]
+        # 🔥 修复：从数据库获取真实的短信规则
+        from .models.sms_rule import SMSRule
+        from .models.account import Account
+        from .models.account_link import AccountLink
+        from sqlalchemy import and_
         
-        logger.info(f"✅ 返回默认短信规则")
+        # 首先验证账号是否存在
+        account = db.query(Account).filter(Account.id == account_id).first()
+        if not account:
+            logger.warning(f"⚠️ 账号不存在: account_id={account_id}")
+            return {
+                "success": False,
+                "message": "账号不存在",
+                "data": []
+            }
+        
+        # 获取该账号关联设备的短信规则
+        # 通过账号找到设备，再找到设备的短信规则
+        from .models.device import Device
+        
+        # 找到该账号的设备
+        account_links = db.query(AccountLink).filter(AccountLink.account_id == account_id).all()
+        device_ids = [link.device_id for link in account_links]
+        
+        if not device_ids:
+            logger.info(f"📭 该账号暂无关联设备: account_id={account_id}")
+            return {
+                "success": True,
+                "message": "该账号暂无关联设备",
+                "data": []
+            }
+        
+        # 获取这些设备的短信规则
+        sms_rules = db.query(SMSRule).filter(
+            and_(
+                SMSRule.device_id.in_(device_ids),
+                SMSRule.is_active == True
+            )
+        ).all()
+        
+        # 转换为前端期望的格式
+        rules_data = []
+        for rule in sms_rules:
+            rules_data.append({
+                "id": rule.id,
+                "rule_name": rule.rule_name,
+                "display_count": rule.display_count or 1,  # 🔥 这里是真实的显示条数
+                "sender_pattern": rule.sender_pattern,
+                "content_pattern": rule.content_pattern,
+                "is_active": rule.is_active,
+                "priority": rule.priority
+            })
+        
+        logger.info(f"✅ 获取到 {len(rules_data)} 条短信规则")
+        for rule in rules_data:
+            logger.info(f"📋 规则: {rule['rule_name']}, 显示条数: {rule['display_count']}")
         
         return {
             "success": True,
-            "message": "获取短信规则成功",
-            "data": default_rules
+            "message": f"获取到 {len(rules_data)} 条短信规则",
+            "data": rules_data
         }
         
     except Exception as e:
