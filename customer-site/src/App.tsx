@@ -10,7 +10,7 @@ import CustomerPage from './pages/CustomerPage';
 const App: React.FC = () => {
   return (
     <ConfigProvider locale={zhCN}>
-      <Router>
+      <Router basename="/customer">
         <div className="App">
           <Routes>
             <Route path="/:linkId" element={<CustomerPage />} />
