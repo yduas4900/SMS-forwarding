@@ -186,38 +186,92 @@ async def get_verification_code_alias(
 ):
     """
     需求文档要求的API路径: GET /api/get_verification_code
-    获取验证码信息
+    获取验证码信息 - 修复为GET方法
     """
     try:
-        from .api.links import get_verification_codes
+        from .models.account_link import AccountLink
+        from .models.sms_rule import SMSRule
+        from .models.sms import SMS
+        from sqlalchemy import desc, and_
+        from datetime import datetime, timezone, timedelta
         
-        # 调用链接管理中的验证码获取函数
-        result = await get_verification_codes(link_id, request, db)
+        # 获取链接信息
+        link = db.query(AccountLink).filter(AccountLink.link_id == link_id).first()
         
-        # 转换为前端期望的格式
-        if result.get("success"):
-            sms_list = result["data"]["sms_list"]
-            
-            # 转换为前端期望的all_matched_sms格式
-            all_matched_sms = []
-            for sms in sms_list:
-                all_matched_sms.append({
-                    "id": hash(sms["content"] + sms["timestamp"]),  # 生成唯一ID
-                    "content": sms["content"],
-                    "sender": sms["sender"],
-                    "sms_timestamp": sms["timestamp"],
-                    "category": sms.get("category", "verification")
-                })
-            
+        if not link:
             return {
-                "success": True,
+                "success": False,
+                "message": "链接不存在",
                 "data": {
-                    "all_matched_sms": all_matched_sms,
-                    "count": len(all_matched_sms)
+                    "all_matched_sms": [],
+                    "count": 0
                 }
             }
-        else:
-            return result
+        
+        # 检查是否允许获取验证码
+        if not link.is_verification_allowed():
+            return {
+                "success": False,
+                "message": "验证码获取次数已达上限或冷却时间未到",
+                "data": {
+                    "all_matched_sms": [],
+                    "count": 0
+                }
+            }
+        
+        # 获取该设备的所有激活短信规则
+        active_rules = db.query(SMSRule).filter(
+            and_(
+                SMSRule.device_id == link.device_id,
+                SMSRule.is_active == True
+            )
+        ).order_by(desc(SMSRule.priority)).all()
+        
+        # 获取该设备的最新短信
+        all_sms = db.query(SMS).filter(
+            SMS.device_id == link.device_id
+        ).order_by(desc(SMS.sms_timestamp)).limit(10).all()
+        
+        # 简单的验证码检测逻辑
+        verification_keywords = [
+            "验证码", "verification", "code", "验证", "确认码", "动态码",
+            "安全码", "登录码", "注册码", "找回密码", "身份验证"
+        ]
+        
+        matched_sms = []
+        for sms in all_sms:
+            content_lower = sms.content.lower()
+            for keyword in verification_keywords:
+                if keyword in content_lower:
+                    matched_sms.append(sms)
+                    break
+        
+        # 取最多5条最新的匹配短信
+        matched_sms = matched_sms[:5]
+        
+        # 更新验证码获取统计
+        link.verification_count += 1
+        link.last_verification_time = datetime.now(timezone.utc)
+        db.commit()
+        
+        # 转换为前端期望的all_matched_sms格式
+        all_matched_sms = []
+        for sms in matched_sms:
+            all_matched_sms.append({
+                "id": sms.id,
+                "content": sms.content,
+                "sender": sms.sender,
+                "sms_timestamp": sms.sms_timestamp.isoformat() if sms.sms_timestamp else None,
+                "category": sms.category or "verification"
+            })
+        
+        return {
+            "success": True,
+            "data": {
+                "all_matched_sms": all_matched_sms,
+                "count": len(all_matched_sms)
+            }
+        }
             
     except Exception as e:
         logger.error(f"获取验证码失败: {str(e)}")

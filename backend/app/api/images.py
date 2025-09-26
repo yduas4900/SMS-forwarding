@@ -32,9 +32,20 @@ async def get_image(filename: str):
         
         # 检查文件是否存在
         if not file_path.exists() or not file_path.is_file():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="图片文件不存在"
+            # 如果文件不存在，返回默认头像
+            logger.warning(f"图片文件不存在: {filename}, 返回默认头像")
+            
+            # 创建一个简单的默认头像响应
+            from fastapi.responses import Response
+            import base64
+            
+            # 1x1像素的透明PNG图片的base64编码
+            default_avatar = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAI9jU77zgAAAABJRU5ErkJggg=="
+            
+            return Response(
+                content=base64.b64decode(default_avatar),
+                media_type="image/png",
+                headers={"Cache-Control": "public, max-age=3600"}
             )
         
         # 检查文件是否在允许的目录内（安全检查）
@@ -62,9 +73,16 @@ async def get_image(filename: str):
         raise
     except Exception as e:
         logger.error(f"获取图片文件失败: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="获取图片文件失败"
+        # 返回默认头像而不是抛出异常
+        from fastapi.responses import Response
+        import base64
+        
+        default_avatar = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAI9jU77zgAAAABJRU5ErkJggg=="
+        
+        return Response(
+            content=base64.b64decode(default_avatar),
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=3600"}
         )
 
 
