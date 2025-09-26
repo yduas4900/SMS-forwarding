@@ -47,6 +47,8 @@ interface VerificationCode {
   code: string;
   received_at: string;
   is_used: boolean;
+  progressive_index?: number;
+  countdown?: number; // 添加倒计时字段
 }
 
 interface LinkInfo {
@@ -188,7 +190,8 @@ const CustomerPage: React.FC = () => {
     if (countdown > 0) return;
     
     try {
-      setLoading(true);
+      // 🔥 修复：不要设置loading为true，避免页面变空白
+      // setLoading(true);
       
       // 获取链接配置信息
       const accountResponse = await axios.get(`${API_BASE_URL}/api/get_account_info`, {
@@ -197,7 +200,6 @@ const CustomerPage: React.FC = () => {
       
       if (!accountResponse.data.success) {
         message.error('获取链接配置失败');
-        setLoading(false);
         return;
       }
       
@@ -235,7 +237,6 @@ const CustomerPage: React.FC = () => {
     } catch (error: any) {
       console.error('获取验证码失败:', error);
       message.error('获取验证码失败: ' + (error.response?.data?.message || error.message));
-      setLoading(false);
     }
   };
 
@@ -493,7 +494,7 @@ const CustomerPage: React.FC = () => {
               <Col xs={24} sm={8} style={{ textAlign: 'center' }}>
                 <Avatar
                   size={80}
-                  src={accountInfo.avatar_url}
+                  src={accountInfo.avatar_url ? `${API_BASE_URL}${accountInfo.avatar_url}` : undefined}
                   icon={<UserOutlined />}
                   style={{ marginBottom: 16 }}
                 />
