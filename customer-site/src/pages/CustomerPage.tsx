@@ -58,8 +58,10 @@ interface LinkInfo {
   link_id: string;
   access_count: number;
   max_access_count: number;
-  created_at: string;
+  max_verification_count: number;
+  access_session_interval?: number;
   verification_wait_time?: number;
+  created_at: string;
 }
 
 interface SmsSlot {
@@ -834,33 +836,126 @@ const CustomerPage: React.FC = () => {
             )}
           </Card>
 
-          {/* 访问统计 */}
+          {/* 使用统计和限制信息 */}
           {linkInfo && (
             <Card
+              title={
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ClockCircleOutlined style={{ color: '#1890ff' }} />
+                  <Text strong style={{ color: '#1890ff' }}>使用限制信息</Text>
+                </div>
+              }
               size="small"
               style={{ 
                 marginTop: 16,
-                borderRadius: 8,
-                background: 'rgba(255,255,255,0.9)'
+                borderRadius: 12,
+                background: 'rgba(255,255,255,0.95)',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.1)'
               }}
             >
-              <Row justify="space-between" align="middle">
-                <Col>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    访问次数: {linkInfo.access_count} / {linkInfo.max_access_count}
-                  </Text>
-                </Col>
-                <Col>
+              <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                {/* 访问次数统计 */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <Text strong style={{ color: '#666' }}>页面访问次数</Text>
+                    <Text 
+                      style={{ 
+                        color: linkInfo.access_count >= linkInfo.max_access_count ? '#ff4d4f' : '#52c41a',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {linkInfo.access_count} / {linkInfo.max_access_count}
+                    </Text>
+                  </div>
                   <Progress
                     percent={Math.round((linkInfo.access_count / linkInfo.max_access_count) * 100)}
                     size="small"
-                    style={{ width: 100 }}
                     strokeColor={
-                      linkInfo.access_count >= linkInfo.max_access_count ? '#ff4d4f' : '#1890ff'
+                      linkInfo.access_count >= linkInfo.max_access_count ? '#ff4d4f' : '#52c41a'
                     }
+                    trailColor="#f0f0f0"
                   />
-                </Col>
-              </Row>
+                  {linkInfo.access_count >= linkInfo.max_access_count && (
+                    <Alert
+                      message="访问次数已达上限"
+                      description="此链接的访问次数已用完，无法继续访问"
+                      type="error"
+                      size="small"
+                      style={{ marginTop: 8 }}
+                      showIcon
+                    />
+                  )}
+                </div>
+
+                {/* 验证码获取次数统计 */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <Text strong style={{ color: '#666' }}>验证码获取次数</Text>
+                    <Text 
+                      style={{ 
+                        color: (accountInfo?.verification_codes?.length || 0) >= linkInfo.max_verification_count ? '#ff4d4f' : '#52c41a',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {accountInfo?.verification_codes?.length || 0} / {linkInfo.max_verification_count}
+                    </Text>
+                  </div>
+                  <Progress
+                    percent={Math.round(((accountInfo?.verification_codes?.length || 0) / linkInfo.max_verification_count) * 100)}
+                    size="small"
+                    strokeColor={
+                      (accountInfo?.verification_codes?.length || 0) >= linkInfo.max_verification_count ? '#ff4d4f' : '#52c41a'
+                    }
+                    trailColor="#f0f0f0"
+                  />
+                  {(accountInfo?.verification_codes?.length || 0) >= linkInfo.max_verification_count && (
+                    <Alert
+                      message="验证码获取次数已达上限"
+                      description="已达到最大验证码获取次数，无法继续获取新的验证码"
+                      type="error"
+                      size="small"
+                      style={{ marginTop: 8 }}
+                      showIcon
+                    />
+                  )}
+                </div>
+
+                {/* 验证码等待时间配置 */}
+                {linkInfo.verification_wait_time && (
+                  <div style={{ 
+                    padding: '12px 16px',
+                    background: '#f6ffed',
+                    borderRadius: 8,
+                    border: '1px solid #b7eb8f'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <ClockCircleOutlined style={{ color: '#52c41a' }} />
+                      <Text strong style={{ color: '#389e0d' }}>验证码等待间隔</Text>
+                    </div>
+                    <Text style={{ color: '#666', fontSize: 12 }}>
+                      每条短信按递增间隔获取：第1条 {linkInfo.verification_wait_time}秒，第2条 {linkInfo.verification_wait_time * 2}秒，第3条 {linkInfo.verification_wait_time * 3}秒...
+                    </Text>
+                  </div>
+                )}
+
+                {/* 访问会话间隔信息 */}
+                {linkInfo.access_session_interval && (
+                  <div style={{ 
+                    padding: '12px 16px',
+                    background: '#f0f9ff',
+                    borderRadius: 8,
+                    border: '1px solid #91d5ff'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <ExclamationCircleOutlined style={{ color: '#1890ff' }} />
+                      <Text strong style={{ color: '#1890ff' }}>访问会话间隔</Text>
+                    </div>
+                    <Text style={{ color: '#666', fontSize: 12 }}>
+                      建议访问间隔：{linkInfo.access_session_interval} 分钟，避免频繁访问
+                    </Text>
+                  </div>
+                )}
+              </Space>
             </Card>
           )}
         </div>
