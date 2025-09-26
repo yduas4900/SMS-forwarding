@@ -366,6 +366,9 @@ async def get_latest_verification_code(
         else:
             logger.info(f"客户端获取匹配短信: Account ID {account.id}, Link ID {link_id}, 无验证码, 获取次数: {link.verification_count}/{link.max_verification_count}, 返回短信数: {len(matched_sms_list)}")
         
+        # 🔥 关键修复：确保返回verification_count字段，解决前端次数不更新问题
+        logger.info(f"🔥 customer.py API返回数据: verification_count={link.verification_count}, max_verification_count={link.max_verification_count}")
+        
         # 🔥 新功能：返回所有匹配的短信，用于完全覆盖客户端显示
         return {
             "success": True,
@@ -375,6 +378,8 @@ async def get_latest_verification_code(
                 "content": verification_sms.content,  # 返回完整的短信内容
                 "sms_timestamp": verification_sms.sms_timestamp.isoformat() if verification_sms.sms_timestamp else None,
                 "display_count": display_count,  # 🔥 新增：返回显示条数，用于客户端倍数倍计时
+                "verification_count": link.verification_count,  # 🔥 关键修复：返回更新后的验证码次数
+                "max_verification_count": link.max_verification_count,  # 🔥 关键修复：返回最大次数
                 # 新增：返回所有匹配的短信列表
                 "all_matched_sms": [
                     {
