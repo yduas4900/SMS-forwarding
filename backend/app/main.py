@@ -364,44 +364,33 @@ async def get_sms_rules_alias(
         logger.info(f"🔍 账号 {account_id} 对应设备ID: {device_id}")
         
         # 🔥 关键修复：从数据库获取真实的短信规则
+        # 注意：短信规则是按account_id查询，不是device_id
         sms_rules = db.query(SMSRule).filter(
-            SMSRule.device_id == device_id,
+            SMSRule.account_id == account_id,  # 🔥 修复：使用account_id而不是device_id
             SMSRule.is_active == True
         ).order_by(SMSRule.priority.desc()).all()
         
-        logger.info(f"🔍 查询到 {len(sms_rules)} 条短信规则")
+        logger.info(f"🔍 查询账号 {account_id} 的短信规则，找到 {len(sms_rules)} 条")
         
         if not sms_rules:
-            logger.warning(f"⚠️ 设备 {device_id} 没有激活的短信规则，查找链接配置")
+            logger.warning(f"⚠️ 账号 {account_id} 没有激活的短信规则，创建默认规则")
             
-            # 🔥 从链接配置中获取用户设置的显示条数
-            link_with_config = db.query(AccountLink).filter(
-                AccountLink.account_id == account_id
-            ).first()
-            
-            # 🔥 尝试从链接的验证码等待时间推断显示条数，或使用默认值
-            display_count = 2  # 默认值
-            if link_with_config and hasattr(link_with_config, 'max_verification_count'):
-                display_count = min(link_with_config.max_verification_count, 5)  # 最多5条
-            
-            logger.info(f"🔍 使用推断的显示条数: {display_count}")
-            
-            # 🔥 创建默认规则返回用户设置的显示条数
+            # 🔥 如果没有规则，创建一个默认规则，使用合理的默认显示条数
             default_rule = {
                 "id": 0,
                 "rule_name": "默认规则",
-                "display_count": display_count,  # 🔥 使用推断的显示条数
+                "display_count": 5,  # 🔥 使用合理的默认值，等待用户在管理端设置
                 "sender_pattern": "*",
                 "content_pattern": "验证码|verification|code",
                 "is_active": True,
                 "priority": 1
             }
             
-            logger.info(f"✅ 返回默认规则，显示条数: {display_count}")
+            logger.info(f"✅ 返回默认规则，显示条数: {default_rule['display_count']}")
             
             return {
                 "success": True,
-                "message": "使用默认短信规则",
+                "message": "使用默认短信规则，请在管理端创建具体规则",
                 "data": [default_rule]
             }
         
