@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import {
   Card,
@@ -23,7 +23,8 @@ import {
   CopyOutlined,
   ClockCircleOutlined,
   CheckCircleOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  LoadingOutlined
 } from '@ant-design/icons';
 import zhCN from 'antd/locale/zh_CN';
 import 'antd/dist/reset.css';
@@ -48,7 +49,8 @@ interface VerificationCode {
   received_at: string;
   is_used: boolean;
   progressive_index?: number;
-  countdown?: number; // 添加倒计时字段
+  full_content?: string;
+  sender?: string;
 }
 
 interface LinkInfo {
@@ -57,6 +59,15 @@ interface LinkInfo {
   access_count: number;
   max_access_count: number;
   created_at: string;
+  verification_wait_time?: number;
+}
+
+interface SmsSlot {
+  index: number;
+  countdown: number;
+  status: 'waiting' | 'retrieving' | 'completed';
+  sms?: VerificationCode;
+  message: string;
 }
 
 const CustomerPage: React.FC = () => {
@@ -67,19 +78,22 @@ const CustomerPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [accessDenied, setAccessDenied] = useState(false);
-  const [countdown, setCountdown] = useState(0);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const [smsCountdowns, setSmsCountdowns] = useState<{[key: number]: number}>({});
-  const smsIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
-  // 🔥 新增：占位框状态管理
-  const [placeholderBoxes, setPlaceholderBoxes] = useState<Array<{
-    index: number;
-    status: 'waiting' | 'fetching' | 'completed';
-    countdown: number;
-    message: string;
-  }>>([]);
+  // 🔥 新增：渐进式获取短信的状态 - 每条短信独立倒计时
+  const [progressiveRetrievalState, setProgressiveRetrievalState] = useState<{
+    isActive: boolean;
+    totalCount: number;
+    smsSlots: SmsSlot[];
+    retrievedSmsIds: Set<number>;
+  }>({
+    isActive: false,
+    totalCount: 0,
+    smsSlots: [],
+    retrievedSmsIds: new Set()
+  });
+
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // 获取链接ID（从URL参数或查询参数）
   const currentLinkId = linkId || searchParams.get('link_id');
@@ -99,11 +113,9 @@ const CustomerPage: React.FC = () => {
       });
 
       if (response.data.success) {
-        // 适配后端API响应结构，但保持原有UI不变
         const accountData = response.data.data.account_info;
         const linkData = response.data.data.link_info;
         
-        // 转换为原有的数据格式
         setAccountInfo({
           id: accountData.id,
           account_name: accountData.account_name,
@@ -118,9 +130,6 @@ const CustomerPage: React.FC = () => {
         setAccessDenied(false);
         setError(null);
         setLastRefresh(new Date());
-        
-        // 🔥 修复：页面加载时不自动获取短信，必须点击"获取验证码"按钮
-        // await fetchExistingSms(); // 注释掉自动获取
       } else {
         if (response.data.error === 'access_limit_exceeded') {
           setAccessDenied(true);
@@ -144,314 +153,230 @@ const CustomerPage: React.FC = () => {
     }
   };
 
-  // 🔥 新增：获取已有短信（不增加验证码获取次数）
-  const fetchExistingSms = async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/get_existing_sms`, {
-        params: { link_id: currentLinkId }
-      });
-      
-      console.log('已有短信API响应:', response.data);
-      
-      if (response.data.success) {
-        const responseData = response.data.data;
-        
-        if (responseData.all_matched_sms && responseData.all_matched_sms.length > 0) {
-          // 将匹配的短信转换为验证码格式
-          const existingCodes = responseData.all_matched_sms.map((sms: any, index: number) => {
-            const extractedCode = extractVerificationCode(sms.content);
-            return {
-              id: sms.id || index,
-              code: extractedCode || sms.content, // 如果没有验证码就显示完整内容
-              received_at: sms.sms_timestamp || new Date().toISOString(),
-              is_used: false,
-              full_content: sms.content, // 保存完整内容
-              sender: sms.sender
-            };
-          });
-          
-          setAccountInfo(prev => prev ? {
-            ...prev,
-            verification_codes: existingCodes
-          } : null);
-          
-          console.log(`页面加载时获取到 ${existingCodes.length} 条已有短信`);
-        }
-      }
-    } catch (error: any) {
-      console.error('获取已有短信失败:', error);
-      // 不显示错误消息，因为这是后台获取
-    }
-  };
+  // 🔥 开始渐进式获取短信 - 为每条短信创建独立倒计时
+  const startProgressiveRetrieval = useCallback(async () => {
+    if (!linkInfo || progressiveRetrievalState.isActive) return;
 
-  // 复制到剪贴板
-  const copyToClipboard = async (text: string, type: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      message.success(`${type}已复制到剪贴板`);
-    } catch (err) {
-      console.error('复制失败:', err);
-      message.error('复制失败，请手动复制');
-    }
-  };
-
-  // 🔥 修复后的渐进式短信获取机制
-  const getVerificationCodes = async () => {
-    if (countdown > 0) return;
+    console.log('🚀 开始渐进式获取短信流程');
     
     try {
-      // 🔥 修复：不要设置loading为true，避免页面变空白
-      // setLoading(true);
-      
-      // 获取链接配置信息
-      const accountResponse = await axios.get(`${API_BASE_URL}/api/get_account_info`, {
-        params: { link_id: currentLinkId }
+      // 获取短信规则配置
+      const rulesResponse = await fetch(`${API_BASE_URL}/api/sms_rules?account_id=${linkInfo.account_id}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
-      
-      if (!accountResponse.data.success) {
-        message.error('获取链接配置失败');
+
+      console.log('📋 短信规则API响应状态:', rulesResponse.status);
+      const rulesData = await rulesResponse.json();
+      console.log('📋 短信规则API完整响应:', JSON.stringify(rulesData, null, 2));
+
+      if (!rulesData.success || !rulesData.data || rulesData.data.length === 0) {
+        console.error('❌ 短信规则API返回失败或无数据:', rulesData);
+        setError('获取短信规则失败');
         return;
       }
+
+      const rule = rulesData.data[0];
+      const displayCount = rule.display_count || 5;
+      const waitTime = linkInfo.verification_wait_time || 10;
       
-      const linkData = accountResponse.data.data.link_info;
-      const waitTime = linkData.verification_wait_time || 10; // 🔥 使用数据库中的真实等待时间！
-      
-      console.log(`🔍 从数据库获取等待时间: ${waitTime}秒 (绝不硬编码！)`);
-      
-      // 🔥 修复：从短信规则API获取真实的显示条数
-      let displayCount = 1; // 默认1条
-      
-      console.log('🔍 链接配置详情:', linkData);
-      
-      // 🔥 从短信规则API获取显示条数 - 绝不使用硬编码！
-      try {
-        const smsRulesResponse = await axios.get(`${API_BASE_URL}/api/sms_rules`, {
-          params: { account_id: accountResponse.data.data.account_info.id }
-        });
-        
-        console.log('🔍 短信规则API完整响应:', JSON.stringify(smsRulesResponse.data, null, 2));
-        
-        if (smsRulesResponse.data.success && smsRulesResponse.data.data && smsRulesResponse.data.data.length > 0) {
-          // 🔥 关键修复：使用数据库中的真实显示条数
-          const firstRule = smsRulesResponse.data.data[0];
-          const realDisplayCount = firstRule.display_count;
-          displayCount = realDisplayCount;
-          console.log(`✅ 从数据库获取真实显示条数: ${displayCount} (规则: ${firstRule.rule_name})`);
-          console.log(`🔍 规则详情:`, JSON.stringify(firstRule, null, 2));
-        } else {
-          console.error('❌ 短信规则API返回空数据或失败');
-          console.log('📋 API响应详情:', smsRulesResponse.data);
-          console.log('⚠️ 未找到短信规则，使用默认显示条数: 1');
-          displayCount = 1;
-        }
-      } catch (error) {
-        console.error('❌ 获取短信规则失败:', error);
-        console.error('❌ 错误详情:', error.response?.data);
-        console.log('⚠️ 短信规则API失败，使用默认显示条数: 1');
-        displayCount = 1;
-      }
-      
-      console.log(`🔍 最终配置: waitTime=${waitTime}, displayCount=${displayCount}`);
-      
-      console.log(`🚀 开始渐进式获取 ${displayCount} 条短信，每条间隔 ${waitTime} 秒`);
-      
-      // 清空现有的验证码
+      console.log('📊 从数据库获取真实显示条数:', displayCount, '(规则:', rule.rule_name, ')');
+
+      // 🔥 为每条短信创建独立的倒计时槽位
+      const smsSlots: SmsSlot[] = Array.from({ length: displayCount }, (_, index) => ({
+        index: index + 1,
+        countdown: (index + 1) * waitTime, // 递增倒计时：第1条10秒，第2条20秒，第3条30秒...
+        status: 'waiting',
+        sms: undefined,
+        message: `正在等待第 ${index + 1} 条短信`
+      }));
+
+      // 初始化渐进式获取状态
+      setProgressiveRetrievalState({
+        isActive: true,
+        totalCount: displayCount,
+        smsSlots: smsSlots,
+        retrievedSmsIds: new Set()
+      });
+
+      // 清空现有验证码
       setAccountInfo(prev => prev ? {
         ...prev,
         verification_codes: []
       } : null);
-      
-      // 启动渐进式获取
-      startProgressiveRetrieval(displayCount, waitTime);
-      
-    } catch (error: any) {
-      console.error('获取验证码失败:', error);
-      message.error('获取验证码失败: ' + (error.response?.data?.message || error.message));
-    }
-  };
 
-  // 🔥 彻底简化的渐进式获取 - 清晰简单的逻辑
-  const startProgressiveRetrieval = (totalCount: number, waitTime: number) => {
-    const retrievedSmsIds = new Set<number>(); // 用于去重
-    
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-    }
-    
-    // 清空占位框，使用简单的倒计时
-    setPlaceholderBoxes([]);
-    setCountdown(totalCount * waitTime);
-    
-    message.info(`开始获取 ${totalCount} 条短信，每条间隔 ${waitTime} 秒`);
-    
-    // 简单的定时器，每waitTime秒获取一条
-    let currentIndex = 0;
-    
-    const fetchNext = () => {
-      if (currentIndex < totalCount) {
-        currentIndex++;
-        console.log(`🚀 开始获取第 ${currentIndex} 条短信`);
-        fetchSingleSms(currentIndex, retrievedSmsIds, totalCount, waitTime);
-        
-        if (currentIndex < totalCount) {
-          setTimeout(fetchNext, waitTime * 1000);
-        }
-      }
-    };
-    
-    // 立即获取第一条，然后按间隔获取后续
-    setTimeout(fetchNext, waitTime * 1000);
-    
-    // 倒计时定时器
-    intervalRef.current = setInterval(() => {
-      setCountdown(prev => {
-        const newCountdown = prev - 1;
-        if (newCountdown <= 0) {
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-          }
-          message.success(`渐进式获取完成`);
-          return 0;
-        }
-        return newCountdown;
-      });
-    }, 1000);
-  };
+      console.log('⏰ 创建', displayCount, '个短信槽位，每个都有独立倒计时');
+      message.success(`开始获取 ${displayCount} 条短信，每条都有独立倒计时`);
 
-  // 🔥 修复后的单条短信获取函数 - 智能获取最新短信，添加重试机制
-  const fetchSingleSms = async (index: number, retrievedSmsIds: Set<number>, totalCount: number, waitTime: number, retryCount = 0) => {
+    } catch (error) {
+      console.error('❌ 启动渐进式获取失败:', error);
+      setError('启动获取流程失败');
+    }
+  }, [linkInfo, progressiveRetrievalState.isActive]);
+
+  // 🔥 获取指定序号的短信
+  const retrieveSpecificSms = useCallback(async (smsIndex: number) => {
+    if (!currentLinkId) return;
+
+    console.log(`🔍 正在获取第 ${smsIndex} 条短信...`);
+
     try {
-      console.log(`📱 正在获取第 ${index}/${totalCount} 条短信... (重试次数: ${retryCount})`);
-      
-      // 🔥 添加延迟，避免API调用过于频繁
-      if (retryCount > 0) {
-        await new Promise(resolve => setTimeout(resolve, 2000)); // 重试时等待2秒
-      }
-      
-      const response = await axios.get(`${API_BASE_URL}/api/get_verification_code`, {
-        params: { 
-          link_id: currentLinkId
+      const response = await fetch(`${API_BASE_URL}/api/get_verification_code?link_id=${currentLinkId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        timeout: 10000 // 10秒超时
       });
-      
-      console.log(`第 ${index} 条短信API响应:`, response.data);
-      
-      if (response.data.success) {
-        const responseData = response.data.data;
-        
-        if (responseData.all_matched_sms && responseData.all_matched_sms.length > 0) {
-          // 🔥 关键修复：按时间排序，获取最新的未获取短信
-          const sortedSms = responseData.all_matched_sms
-            .sort((a: any, b: any) => {
-              const timeA = new Date(a.sms_timestamp || 0).getTime();
-              const timeB = new Date(b.sms_timestamp || 0).getTime();
-              return timeB - timeA; // 最新的在前
-            });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(`✅ 第 ${smsIndex} 条短信API响应:`, data);
+
+      if (data.success && data.data?.all_matched_sms?.length > 0) {
+        // 过滤掉已经获取过的短信，获取最新的
+        const newSms = data.data.all_matched_sms.filter((sms: any) => 
+          !progressiveRetrievalState.retrievedSmsIds.has(sms.id)
+        );
+
+        if (newSms.length > 0) {
+          const latestSms = newSms[0]; // 获取最新的一条
           
-          // 🔥 智能选择：优先选择最新的未获取短信
-          let selectedSms = null;
-          for (const sms of sortedSms) {
-            if (!retrievedSmsIds.has(sms.id)) {
-              selectedSms = sms;
-              break; // 找到第一个（最新的）未获取短信
-            }
-          }
+          // 提取验证码
+          const extractedCode = extractVerificationCode(latestSms.content);
+          const newCode: VerificationCode = {
+            id: latestSms.id,
+            code: extractedCode || latestSms.content,
+            received_at: latestSms.sms_timestamp || new Date().toISOString(),
+            is_used: false,
+            full_content: latestSms.content,
+            sender: latestSms.sender,
+            progressive_index: smsIndex
+          };
           
-          if (selectedSms) {
-            retrievedSmsIds.add(selectedSms.id);
-            
-            const extractedCode = extractVerificationCode(selectedSms.content);
-            const newCode = {
-              id: selectedSms.id,
-              code: extractedCode || selectedSms.content,
-              received_at: selectedSms.sms_timestamp || new Date().toISOString(),
-              is_used: false,
-              full_content: selectedSms.content,
-              sender: selectedSms.sender,
-              progressive_index: index, // 标记获取顺序
-              countdown: waitTime // 添加倒计时
-            };
-            
-            // 添加到验证码列表
-            setAccountInfo(prev => prev ? {
-              ...prev,
-              verification_codes: [...(prev.verification_codes || []), newCode]
-            } : null);
-            
-            // 🔥 为这条短信启动倒计时
-            setSmsCountdowns(prev => ({
-              ...prev,
-              [selectedSms.id]: waitTime
-            }));
-            
-            // 🔥 修复：获取成功后移除对应的占位框，让验证码直接显示
-            setPlaceholderBoxes(prev => prev.filter(box => box.index !== index));
-            
-            console.log(`✅ 第 ${index} 条短信获取成功: ${newCode.code} (时间: ${selectedSms.sms_timestamp})`);
-            message.success(`第 ${index} 条短信获取成功: ${newCode.code}`);
-          } else {
-            console.log(`⚠️ 第 ${index} 条短信：所有短信都已获取过`);
-            message.info(`第 ${index} 条短信：所有短信都已获取过`);
-            
-            // 🔥 修复：无新短信时也移除占位框
-            setPlaceholderBoxes(prev => prev.filter(box => box.index !== index));
-          }
+          // 更新对应槽位的状态
+          setProgressiveRetrievalState(prev => ({
+            ...prev,
+            smsSlots: prev.smsSlots.map(slot => 
+              slot.index === smsIndex 
+                ? { 
+                    ...slot, 
+                    status: 'completed', 
+                    sms: newCode,
+                    message: `第 ${smsIndex} 条短信已获取`
+                  }
+                : slot
+            ),
+            retrievedSmsIds: new Set([...prev.retrievedSmsIds, latestSms.id])
+          }));
+
+          // 添加到短信列表
+          setAccountInfo(prev => prev ? {
+            ...prev,
+            verification_codes: [...(prev.verification_codes || []), newCode]
+          } : null);
+
+          console.log(`📱 第 ${smsIndex} 条短信获取成功:`, newCode.code);
+          message.success(`第 ${smsIndex} 条短信获取成功: ${newCode.code}`);
         } else {
-          console.log(`📭 第 ${index} 条短信暂无匹配内容`);
-          message.info(`第 ${index} 条短信暂无匹配内容`);
-          
-          // 🔥 修复：暂无内容时也移除占位框
-          setPlaceholderBoxes(prev => prev.filter(box => box.index !== index));
+          // 没有新短信，标记为完成但无内容
+          setProgressiveRetrievalState(prev => ({
+            ...prev,
+            smsSlots: prev.smsSlots.map(slot => 
+              slot.index === smsIndex 
+                ? { 
+                    ...slot, 
+                    status: 'completed',
+                    message: `第 ${smsIndex} 条短信：无新内容`
+                  }
+                : slot
+            )
+          }));
+          console.log(`⚠️ 第 ${smsIndex} 条短信: 没有新的短信`);
         }
       } else {
-        // 🔥 添加重试逻辑
-        if (retryCount < 2) {
-          console.log(`⚠️ 第 ${index} 条短信获取失败，准备重试: ${response.data.message}`);
-          setPlaceholderBoxes(prev => prev.map(box => 
-            box.index === index 
-              ? { ...box, status: 'fetching', message: `第 ${index} 条短信重试中... (${retryCount + 1}/3)` }
-              : box
-          ));
-          
-          // 延迟后重试
-          setTimeout(() => {
-            fetchSingleSms(index, retrievedSmsIds, totalCount, waitTime, retryCount + 1);
-          }, 3000);
-          return;
-        }
-        
-        console.log(`❌ 第 ${index} 条短信获取失败:`, response.data.message);
-        message.warning(`第 ${index} 条短信获取失败: ${response.data.message}`);
-        
-        // 🔥 移除失败的占位框
-        setPlaceholderBoxes(prev => prev.filter(box => box.index !== index));
+        // API失败，标记为完成
+        setProgressiveRetrievalState(prev => ({
+          ...prev,
+          smsSlots: prev.smsSlots.map(slot => 
+            slot.index === smsIndex 
+              ? { 
+                  ...slot, 
+                  status: 'completed',
+                  message: `第 ${smsIndex} 条短信获取失败`
+                }
+              : slot
+          )
+        }));
+        console.log(`⚠️ 第 ${smsIndex} 条短信获取失败:`, data.message);
       }
-    } catch (error: any) {
-      // 🔥 添加重试逻辑
-      if (retryCount < 2 && (error.response?.status === 429 || error.code === 'ECONNABORTED')) {
-        console.log(`⚠️ 第 ${index} 条短信网络错误，准备重试:`, error.message);
-        setPlaceholderBoxes(prev => prev.map(box => 
-          box.index === index 
-            ? { ...box, status: 'fetching', message: `第 ${index} 条短信重试中... (${retryCount + 1}/3)` }
-            : box
-        ));
-        
-        // 延迟后重试
-        setTimeout(() => {
-          fetchSingleSms(index, retrievedSmsIds, totalCount, waitTime, retryCount + 1);
-        }, 3000);
-        return;
-      }
-      
-      console.error(`获取第 ${index} 条短信失败:`, error);
-      message.error(`第 ${index} 条短信获取失败: ${error.response?.data?.message || error.message}`);
-      
-      // 🔥 移除失败的占位框
-      setPlaceholderBoxes(prev => prev.filter(box => box.index !== index));
-    }
-  };
 
+    } catch (error) {
+      // 错误处理，标记为完成
+      setProgressiveRetrievalState(prev => ({
+        ...prev,
+        smsSlots: prev.smsSlots.map(slot => 
+          slot.index === smsIndex 
+            ? { 
+                ...slot, 
+                status: 'completed',
+                message: `第 ${smsIndex} 条短信获取失败`
+              }
+            : slot
+        )
+      }));
+      console.error(`❌ 第 ${smsIndex} 条短信获取失败:`, error);
+    }
+  }, [currentLinkId, progressiveRetrievalState.retrievedSmsIds]);
+
+  // 🔥 独立倒计时效果 - 每个短信槽位都有自己的倒计时
+  useEffect(() => {
+    if (!progressiveRetrievalState.isActive) return;
+
+    const timer = setInterval(() => {
+      setProgressiveRetrievalState(prev => {
+        const updatedSlots = prev.smsSlots.map(slot => {
+          if (slot.status === 'waiting' && slot.countdown > 0) {
+            const newCountdown = slot.countdown - 1;
+            
+            if (newCountdown <= 0) {
+              // 倒计时结束，开始获取这条短信
+              console.log(`⏰ 第${slot.index}条短信倒计时结束，开始获取`);
+              retrieveSpecificSms(slot.index);
+              return {
+                ...slot,
+                countdown: 0,
+                status: 'retrieving',
+                message: `正在获取第 ${slot.index} 条短信...`
+              };
+            }
+            
+            return {
+              ...slot,
+              countdown: newCountdown,
+              message: `第 ${slot.index} 条短信倒计时: ${newCountdown}秒`
+            };
+          }
+          return slot;
+        });
+
+        // 检查是否所有短信都已完成
+        const allCompleted = updatedSlots.every(slot => slot.status === 'completed');
+        
+        return {
+          ...prev,
+          smsSlots: updatedSlots,
+          isActive: !allCompleted
+        };
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [progressiveRetrievalState.isActive, retrieveSpecificSms]);
 
   // 提取验证码的辅助函数
   const extractVerificationCode = (content: string): string | null => {
@@ -473,60 +398,16 @@ const CustomerPage: React.FC = () => {
     return null;
   };
 
-  // 刷新账号信息（不获取验证码）
-  const refreshAccountInfo = () => {
-    fetchAccountInfo();
-  };
-
-  // 组件挂载时获取数据
-  useEffect(() => {
-    fetchAccountInfo();
-    
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-      if (smsIntervalRef.current) {
-        clearInterval(smsIntervalRef.current);
-      }
-    };
-  }, [currentLinkId]);
-
-  // 🔥 短信倒计时定时器
-  useEffect(() => {
-    if (Object.keys(smsCountdowns).length > 0) {
-      if (smsIntervalRef.current) {
-        clearInterval(smsIntervalRef.current);
-      }
-      
-      smsIntervalRef.current = setInterval(() => {
-        setSmsCountdowns(prev => {
-          const newCountdowns = { ...prev };
-          let hasActiveCountdown = false;
-          
-          for (const smsId in newCountdowns) {
-            if (newCountdowns[smsId] > 0) {
-              newCountdowns[smsId]--;
-              hasActiveCountdown = true;
-            }
-          }
-          
-          // 如果没有活跃的倒计时，清除定时器
-          if (!hasActiveCountdown && smsIntervalRef.current) {
-            clearInterval(smsIntervalRef.current);
-          }
-          
-          return newCountdowns;
-        });
-      }, 1000);
+  // 复制到剪贴板
+  const copyToClipboard = async (text: string, type: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      message.success(`${type}已复制到剪贴板`);
+    } catch (err) {
+      console.error('复制失败:', err);
+      message.error('复制失败，请手动复制');
     }
-    
-    return () => {
-      if (smsIntervalRef.current) {
-        clearInterval(smsIntervalRef.current);
-      }
-    };
-  }, [smsCountdowns]);
+  };
 
   // 格式化时间
   const formatTime = (dateString: string) => {
@@ -555,6 +436,17 @@ const CustomerPage: React.FC = () => {
     const diffHours = Math.floor(diffMinutes / 60);
     return { text: `${diffHours}小时前`, color: '#ff4d4f' };
   };
+
+  // 组件挂载时获取数据
+  useEffect(() => {
+    fetchAccountInfo();
+    
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [currentLinkId]);
 
   // 在所有return语句中包装ConfigProvider
   if (loading) {
@@ -719,11 +611,11 @@ const CustomerPage: React.FC = () => {
                     type="primary"
                     size="small"
                     icon={<CheckCircleOutlined />}
-                    onClick={getVerificationCodes}
-                    disabled={countdown > 0}
+                    onClick={startProgressiveRetrieval}
+                    disabled={progressiveRetrievalState.isActive}
                     loading={loading}
                   >
-                    {countdown > 0 ? `等待 ${countdown}s` : '获取验证码'}
+                    {progressiveRetrievalState.isActive ? '获取中...' : '获取验证码'}
                   </Button>
                 </div>
               </div>
@@ -733,147 +625,105 @@ const CustomerPage: React.FC = () => {
               boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
             }}
           >
-            {/* 🔥 优先显示占位框，然后显示验证码 */}
-            {placeholderBoxes.length > 0 ? (
-              <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                {placeholderBoxes.map((box) => (
-                  <Card
-                    key={`placeholder-${box.index}`}
-                    size="small"
-                    style={{
-                      background: box.status === 'waiting' ? '#fff7e6' : 
-                                 box.status === 'fetching' ? '#e6f7ff' : '#f6ffed',
-                      border: `1px solid ${
-                        box.status === 'waiting' ? '#ffd666' : 
-                        box.status === 'fetching' ? '#91d5ff' : '#b7eb8f'
-                      }`,
-                      borderRadius: 8
-                    }}
-                  >
-                    <Row align="middle" justify="space-between">
-                      <Col flex="auto">
-                        <Space direction="vertical" size={4}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <Text strong style={{ fontSize: 16, color: '#666' }}>
-                              {box.message}
-                            </Text>
-                            <Tag 
-                              color={
-                                box.status === 'waiting' ? 'orange' : 
-                                box.status === 'fetching' ? 'blue' : 'green'
-                              } 
-                              size="small"
-                            >
-                              {box.status === 'waiting' ? `倒计时 ${box.countdown}s` :
-                               box.status === 'fetching' ? '获取中...' : '已完成'}
-                            </Tag>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <ClockCircleOutlined style={{ color: '#faad14' }} />
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                              第 {box.index} 条短信
-                            </Text>
-                            {box.status === 'waiting' && (
-                              <Progress 
-                                percent={Math.max(0, 100 - (box.countdown / (box.index * 10)) * 100)} 
-                                size="small" 
-                                style={{ width: 100 }}
-                                strokeColor="#faad14"
-                              />
-                            )}
-                          </div>
-                        </Space>
-                      </Col>
-                      <Col>
-                        {box.status === 'fetching' && (
-                          <Spin size="small" />
-                        )}
-                      </Col>
-                    </Row>
-                  </Card>
-                ))}
+            {/* 🔥 渐进式获取状态显示 - 显示每条短信的独立倒计时 */}
+            {progressiveRetrievalState.isActive && (
+              <div style={{ 
+                marginBottom: '24px',
+                padding: '16px',
+                backgroundColor: '#f0f9ff',
+                borderRadius: '8px',
+                border: '1px solid #bae6fd'
+              }}>
+                <div style={{ 
+                  fontSize: '14px',
+                  color: '#0369a1',
+                  marginBottom: '12px',
+                  textAlign: 'center',
+                  fontWeight: 'bold'
+                }}>
+                  📱 正在获取 {progressiveRetrievalState.totalCount} 条短信
+                </div>
                 
-                {/* 🔥 在占位框下方显示已获取的验证码 */}
-                {accountInfo.verification_codes && accountInfo.verification_codes.length > 0 && (
-                  <>
-                    <Divider orientation="left" style={{ margin: '16px 0' }}>
-                      <Text type="secondary">已获取的验证码</Text>
-                    </Divider>
-                    {accountInfo.verification_codes
-                      .sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime())
-                      .map((code) => {
-                        const freshness = getCodeFreshness(code.received_at);
-                        return (
-                          <Card
-                            key={code.id}
-                            size="small"
-                            style={{
-                              background: code.is_used ? '#f5f5f5' : '#fff',
-                              border: `1px solid ${code.is_used ? '#d9d9d9' : '#1890ff'}`,
-                              borderRadius: 8
-                            }}
-                          >
-                            <Row align="middle" justify="space-between">
-                              <Col flex="auto">
-                                <Space direction="vertical" size={4}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <Text
-                                      strong
-                                      style={{
-                                        fontSize: 18,
-                                        fontFamily: 'monospace',
-                                        color: code.is_used ? '#999' : '#1890ff'
-                                      }}
-                                    >
-                                      {code.code}
-                                    </Text>
-                                    {code.is_used && (
-                                      <Tag color="default" size="small">已使用</Tag>
-                                    )}
-                                    {/* 🔥 显示短信倒计时 */}
-                                    {smsCountdowns[code.id] > 0 && (
-                                      <Tag color="orange" size="small">
-                                        倒计时 {smsCountdowns[code.id]}s
-                                      </Tag>
-                                    )}
-                                  </div>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <ClockCircleOutlined style={{ color: freshness.color }} />
-                                    <Text type="secondary" style={{ fontSize: 12 }}>
-                                      {formatTime(code.received_at)}
-                                    </Text>
-                                    <Tag color={freshness.color} size="small">
-                                      {freshness.text}
-                                    </Tag>
-                                    {/* 🔥 显示获取顺序 */}
-                                    {code.progressive_index && (
-                                      <Tag color="blue" size="small">
-                                        第{code.progressive_index}条
-                                      </Tag>
-                                    )}
-                                  </div>
-                                </Space>
-                              </Col>
-                              <Col>
-                                <Button
-                                  type="primary"
-                                  ghost
-                                  icon={<CopyOutlined />}
-                                  size="small"
-                                  onClick={() => copyToClipboard(code.code, '验证码')}
-                                  disabled={code.is_used}
-                                >
-                                  复制
-                                </Button>
-                              </Col>
-                            </Row>
-                          </Card>
-                        );
-                      })}
-                  </>
-                )}
-              </Space>
-            ) : accountInfo.verification_codes && accountInfo.verification_codes.length > 0 ? (
+                {/* 显示每条短信的状态 */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {progressiveRetrievalState.smsSlots.map((slot) => (
+                    <div 
+                      key={slot.index}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        backgroundColor: slot.status === 'completed' ? '#dcfce7' : 
+                                       slot.status === 'retrieving' ? '#fef3c7' : '#f8fafc',
+                        borderRadius: '8px',
+                        border: `2px solid ${slot.status === 'completed' ? '#bbf7d0' : 
+                                            slot.status === 'retrieving' ? '#fde68a' : '#e2e8f0'}`,
+                        transition: 'all 0.3s ease'
+                      }}
+                    >
+                      <div style={{ 
+                        fontSize: '14px', 
+                        fontWeight: '600',
+                        color: slot.status === 'completed' ? '#166534' : 
+                               slot.status === 'retrieving' ? '#92400e' : '#475569'
+                      }}>
+                        {slot.message}
+                      </div>
+                      
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        {slot.status === 'waiting' && (
+                          <>
+                            <div style={{
+                              fontSize: '18px',
+                              fontWeight: 'bold',
+                              color: '#3b82f6',
+                              minWidth: '40px',
+                              textAlign: 'center',
+                              fontFamily: 'monospace'
+                            }}>
+                              {slot.countdown}
+                            </div>
+                            <div style={{ fontSize: '12px', color: '#64748b' }}>秒后获取</div>
+                          </>
+                        )}
+                        
+                        {slot.status === 'retrieving' && (
+                          <div style={{ 
+                            fontSize: '12px', 
+                            color: '#92400e',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}>
+                            <Spin 
+                              indicator={<LoadingOutlined style={{ fontSize: 16, color: '#f59e0b' }} spin />} 
+                            />
+                            正在获取...
+                          </div>
+                        )}
+                        
+                        {slot.status === 'completed' && (
+                          <div style={{ 
+                            fontSize: '12px', 
+                            color: '#166534',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}>
+                            <CheckCircleOutlined style={{ color: '#22c55e', fontSize: 16 }} />
+                            {slot.sms ? '已获取' : '无新短信'}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 验证码列表 */}
+            {accountInfo.verification_codes && accountInfo.verification_codes.length > 0 ? (
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 {accountInfo.verification_codes
                   .sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime())
@@ -885,20 +735,22 @@ const CustomerPage: React.FC = () => {
                         size="small"
                         style={{
                           background: code.is_used ? '#f5f5f5' : '#fff',
-                          border: `1px solid ${code.is_used ? '#d9d9d9' : '#1890ff'}`,
-                          borderRadius: 8
+                          border: `2px solid ${code.is_used ? '#d9d9d9' : '#1890ff'}`,
+                          borderRadius: 12,
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                         }}
                       >
                         <Row align="middle" justify="space-between">
                           <Col flex="auto">
-                            <Space direction="vertical" size={4}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Space direction="vertical" size={6}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                 <Text
                                   strong
                                   style={{
-                                    fontSize: 18,
+                                    fontSize: 20,
                                     fontFamily: 'monospace',
-                                    color: code.is_used ? '#999' : '#1890ff'
+                                    color: code.is_used ? '#999' : '#1890ff',
+                                    letterSpacing: '2px'
                                   }}
                                 >
                                   {code.code}
@@ -906,10 +758,9 @@ const CustomerPage: React.FC = () => {
                                 {code.is_used && (
                                   <Tag color="default" size="small">已使用</Tag>
                                 )}
-                                {/* 🔥 显示短信倒计时 */}
-                                {smsCountdowns[code.id] > 0 && (
-                                  <Tag color="orange" size="small">
-                                    倒计时 {smsCountdowns[code.id]}s
+                                {code.progressive_index && (
+                                  <Tag color="blue" size="small">
+                                    第{code.progressive_index}条
                                   </Tag>
                                 )}
                               </div>
@@ -921,12 +772,6 @@ const CustomerPage: React.FC = () => {
                                 <Tag color={freshness.color} size="small">
                                   {freshness.text}
                                 </Tag>
-                                {/* 🔥 显示获取顺序 */}
-                                {code.progressive_index && (
-                                  <Tag color="blue" size="small">
-                                    第{code.progressive_index}条
-                                  </Tag>
-                                )}
                               </div>
                             </Space>
                           </Col>
@@ -952,7 +797,7 @@ const CustomerPage: React.FC = () => {
                 <MobileOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
                 <Title level={4} type="secondary">暂无验证码</Title>
                 <Paragraph type="secondary">
-                  验证码将在收到后自动显示在这里
+                  点击"获取验证码"按钮开始获取短信验证码
                 </Paragraph>
               </div>
             )}
