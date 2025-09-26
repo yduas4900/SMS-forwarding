@@ -73,8 +73,21 @@ def init_default_data():
         
         if not admin_user:
             logger.info("创建默认管理员用户...")
+            
             # 生成admin123的正确哈希
-            hashed_password = pwd_context.hash("admin123")
+            password = "admin123"
+            hashed_password = pwd_context.hash(password)
+            
+            logger.info(f"生成的密码哈希: {hashed_password}")
+            logger.info(f"哈希长度: {len(hashed_password)}")
+            
+            # 验证哈希是否正确
+            is_valid = pwd_context.verify(password, hashed_password)
+            logger.info(f"哈希验证结果: {is_valid}")
+            
+            if not is_valid:
+                logger.error("生成的哈希验证失败！")
+                raise Exception("密码哈希生成失败")
             
             # 创建默认管理员用户
             admin_user = User(
@@ -87,9 +100,44 @@ def init_default_data():
             )
             
             db.add(admin_user)
-            logger.info("默认管理员用户创建成功 (用户名: admin, 密码: admin123)")
+            db.flush()  # 刷新以获取ID
+            
+            logger.info(f"默认管理员用户创建成功 (ID: {admin_user.id})")
+            logger.info("登录凭据: 用户名=admin, 密码=admin123")
+            
+            # 验证数据库中的哈希
+            db.refresh(admin_user)
+            stored_hash = admin_user.hashed_password
+            logger.info(f"数据库中存储的哈希: {stored_hash}")
+            logger.info(f"存储哈希长度: {len(stored_hash)}")
+            
+            # 最终验证
+            final_check = pwd_context.verify(password, stored_hash)
+            logger.info(f"最终验证结果: {final_check}")
+            
+            if not final_check:
+                logger.error("数据库中的哈希验证失败！可能被截断了")
+                raise Exception("密码哈希存储验证失败")
+                
         else:
-            logger.info("管理员用户已存在，跳过创建")
+            logger.info(f"管理员用户已存在 (ID: {admin_user.id})")
+            # 验证现有用户的密码哈希
+            stored_hash = admin_user.hashed_password
+            logger.info(f"现有用户哈希长度: {len(stored_hash)}")
+            
+            # 测试现有密码
+            test_verify = pwd_context.verify("admin123", stored_hash)
+            logger.info(f"现有密码验证结果: {test_verify}")
+            
+            if not test_verify:
+                logger.warning("现有管理员密码验证失败，重置密码...")
+                new_hash = pwd_context.hash("admin123")
+                admin_user.hashed_password = new_hash
+                db.flush()
+                
+                # 重新验证
+                final_verify = pwd_context.verify("admin123", admin_user.hashed_password)
+                logger.info(f"密码重置后验证结果: {final_verify}")
         
         # 检查是否已有服务类型数据
         result = db.execute(text("SELECT COUNT(*) FROM service_types"))
