@@ -51,6 +51,19 @@ interface VerificationCode {
   progressive_index?: number;
   full_content?: string;
   sender?: string;
+  smart_recognition?: {
+    region: string;
+    best_code: {
+      code: string;
+      confidence: number;
+      pattern_type: string;
+    };
+    all_candidates: Array<{
+      code: string;
+      confidence: number;
+      pattern_type: string;
+    }>;
+  };
 }
 
 interface LinkInfo {
@@ -312,16 +325,30 @@ const CustomerPage: React.FC = () => {
         if (newSms.length > 0) {
           const latestSms = newSms[0]; // 获取最新的一条
           
-          // 提取验证码
-          const extractedCode = extractVerificationCode(latestSms.content);
+          // 🔥 使用智能识别结果
+          let extractedCode = latestSms.content;
+          let smartRecognition = null;
+          
+          // 检查是否有智能识别结果
+          if (data.data.smart_recognition && data.data.smart_recognition.best_code) {
+            extractedCode = data.data.smart_recognition.best_code.code;
+            smartRecognition = data.data.smart_recognition;
+            console.log('🧠 使用智能识别的验证码:', extractedCode, '置信度:', data.data.smart_recognition.best_code.confidence);
+          } else {
+            // 回退到本地提取
+            extractedCode = extractVerificationCode(latestSms.content) || latestSms.content;
+            console.log('🔧 使用本地提取的验证码:', extractedCode);
+          }
+          
           const newCode: VerificationCode = {
             id: latestSms.id,
-            code: extractedCode || latestSms.content,
+            code: extractedCode,
             received_at: latestSms.sms_timestamp || new Date().toISOString(),
             is_used: false,
             full_content: latestSms.content,
             sender: latestSms.sender,
-            progressive_index: smsIndex
+            progressive_index: smsIndex,
+            smart_recognition: smartRecognition
           };
           
           // 更新对应槽位的状态
@@ -799,72 +826,134 @@ const CustomerPage: React.FC = () => {
               </div>
             )}
 
-            {/* 验证码列表 */}
+            {/* 短信列表 - 显示完整短信内容 */}
             {accountInfo.verification_codes && accountInfo.verification_codes.length > 0 ? (
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 {accountInfo.verification_codes
                   .sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime())
-                  .map((code) => {
-                    const freshness = getCodeFreshness(code.received_at);
+                  .map((sms) => {
+                    const freshness = getCodeFreshness(sms.received_at);
+                    // 显示完整短信内容，如果没有full_content则显示code
+                    const fullContent = sms.full_content || sms.code;
+                    const extractedCode = sms.code;
+                    
                     return (
                       <Card
-                        key={code.id}
+                        key={sms.id}
                         size="small"
                         style={{
-                          background: code.is_used ? '#f5f5f5' : '#fff',
-                          border: `2px solid ${code.is_used ? '#d9d9d9' : '#1890ff'}`,
+                          background: sms.is_used ? '#f5f5f5' : '#fff',
+                          border: `2px solid ${sms.is_used ? '#d9d9d9' : '#1890ff'}`,
                           borderRadius: 12,
                           boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                         }}
                       >
-                        <Row align="middle" justify="space-between">
-                          <Col flex="auto">
-                            <Space direction="vertical" size={6}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                <Text
-                                  strong
-                                  style={{
-                                    fontSize: 20,
-                                    fontFamily: 'monospace',
-                                    color: code.is_used ? '#999' : '#1890ff',
-                                    letterSpacing: '2px'
-                                  }}
-                                >
-                                  {code.code}
-                                </Text>
-                                {code.is_used && (
-                                  <Tag color="default" size="small">已使用</Tag>
-                                )}
-                                {code.progressive_index && (
-                                  <Tag color="blue" size="small">
-                                    第{code.progressive_index}条
-                                  </Tag>
-                                )}
-                              </div>
+                        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                          {/* 短信头部信息 */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              {sms.progressive_index && (
+                                <Tag color="blue" size="small">
+                                  第{sms.progressive_index}条
+                                </Tag>
+                              )}
+                              {sms.is_used && (
+                                <Tag color="default" size="small">已使用</Tag>
+                              )}
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <ClockCircleOutlined style={{ color: freshness.color }} />
                                 <Text type="secondary" style={{ fontSize: 12 }}>
-                                  {formatTime(code.received_at)}
+                                  {formatTime(sms.received_at)}
                                 </Text>
                                 <Tag color={freshness.color} size="small">
                                   {freshness.text}
                                 </Tag>
                               </div>
-                            </Space>
-                          </Col>
-                          <Col>
+                            </div>
+                            {sms.sender && (
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                来自: {sms.sender}
+                              </Text>
+                            )}
+                          </div>
+
+                          {/* 完整短信内容 */}
+                          <div style={{
+                            padding: '12px 16px',
+                            background: '#f8f9fa',
+                            borderRadius: 8,
+                            border: '1px solid #e9ecef',
+                            lineHeight: '1.6'
+                          }}>
+                            <Text style={{ 
+                              fontSize: 14,
+                              color: '#333',
+                              wordBreak: 'break-word',
+                              whiteSpace: 'pre-wrap'
+                            }}>
+                              {fullContent}
+                            </Text>
+                          </div>
+
+                          {/* 提取的验证码（如果有） */}
+                          {extractedCode && extractedCode !== fullContent && (
+                            <div style={{
+                              padding: '8px 12px',
+                              background: '#e6f7ff',
+                              borderRadius: 6,
+                              border: '1px solid #91d5ff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between'
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Text type="secondary" style={{ fontSize: 12 }}>识别的验证码:</Text>
+                                <Text
+                                  strong
+                                  style={{
+                                    fontSize: 16,
+                                    fontFamily: 'monospace',
+                                    color: '#1890ff',
+                                    letterSpacing: '1px'
+                                  }}
+                                >
+                                  {extractedCode}
+                                </Text>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 复制按钮组 */}
+                          <div style={{ 
+                            display: 'flex', 
+                            gap: 8, 
+                            justifyContent: 'flex-end',
+                            paddingTop: 8,
+                            borderTop: '1px solid #f0f0f0'
+                          }}>
                             <Button
-                              type="primary"
-                              ghost
+                              type="default"
                               icon={<CopyOutlined />}
                               size="small"
-                              onClick={() => copyToClipboard(code.code, '验证码')}
-                              disabled={code.is_used}
+                              onClick={() => copyToClipboard(fullContent, '短信全文')}
+                              disabled={sms.is_used}
                             >
-                              复制
+                              复制全文
                             </Button>
-                          </Col>
-                        </Row>
+                            {extractedCode && extractedCode !== fullContent && (
+                              <Button
+                                type="primary"
+                                ghost
+                                icon={<CopyOutlined />}
+                                size="small"
+                                onClick={() => copyToClipboard(extractedCode, '验证码')}
+                                disabled={sms.is_used}
+                              >
+                                复制验证码
+                              </Button>
+                            )}
+                          </div>
+                        </Space>
                       </Card>
                     );
                   })}
