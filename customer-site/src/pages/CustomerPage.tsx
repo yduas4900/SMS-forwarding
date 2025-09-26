@@ -201,14 +201,24 @@ const CustomerPage: React.FC = () => {
 
       const rule = rulesData.data[0];
       const displayCount = rule.display_count || 5;
-      const waitTime = linkInfo.verification_wait_time || 10;
+      
+      // 🔥 修复：完全使用用户设置的验证码等待时间，不使用任何硬编码默认值
+      const waitTime = linkInfo.verification_wait_time;
+      
+      if (!waitTime) {
+        console.error('❌ 验证码等待时间未设置:', linkInfo);
+        setError('验证码等待时间未配置，请联系管理员设置');
+        return;
+      }
       
       console.log('📊 从数据库获取真实显示条数:', displayCount, '(规则:', rule.rule_name, ')');
+      console.log('⏰ 使用用户设置的验证码等待时间:', waitTime, '秒');
 
-      // 🔥 为每条短信创建独立的倒计时槽位
+      // 🔥 为每条短信创建独立的倒计时槽位 - 完全使用用户设置的时间间隔
+      // 第1条短信：waitTime秒，第2条短信：waitTime*2秒，第3条短信：waitTime*3秒...
       const smsSlots: SmsSlot[] = Array.from({ length: displayCount }, (_, index) => ({
         index: index + 1,
-        countdown: (index + 1) * waitTime, // 递增倒计时：第1条10秒，第2条20秒，第3条30秒...
+        countdown: (index + 1) * waitTime, // 递增倒计时：使用用户设置的时间间隔
         status: 'waiting',
         sms: undefined,
         message: `正在等待第 ${index + 1} 条短信`
