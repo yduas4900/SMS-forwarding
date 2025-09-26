@@ -339,26 +339,60 @@ async def get_sms_rules_alias(
 ):
     """
     需求文档要求的API路径: GET /api/sms_rules
-    获取短信规则信息 - 从数据库获取真实规则
+    获取短信规则信息 - 从数据库获取真实规则，绝不硬编码！
     """
     try:
         logger.info(f"🔍 获取短信规则请求: account_id={account_id}")
         
-        # 🔥 修复：简化逻辑，直接返回您设置的3条显示
-        logger.info(f"🔍 为账号 {account_id} 返回短信规则")
+        # 🔥 彻底修复：从数据库获取真实的短信规则
+        from .models.sms_rule import SMSRule
+        from .models.account_link import AccountLink
         
-        # 🔥 临时修复：直接返回您设置的显示条数
-        rules_data = [{
-            "id": 1,
-            "rule_name": "测试规则",
-            "display_count": 3,  # 🔥 直接使用您设置的3条
-            "sender_pattern": "*",
-            "content_pattern": "验证码|verification|code",
-            "is_active": True,
-            "priority": 1
-        }]
+        # 首先通过账号ID找到对应的设备ID
+        account_links = db.query(AccountLink).filter(AccountLink.account_id == account_id).all()
         
-        logger.info(f"✅ 返回短信规则，显示条数: 3")
+        if not account_links:
+            logger.warning(f"⚠️ 账号 {account_id} 没有关联的链接")
+            return {
+                "success": False,
+                "message": "账号没有关联的链接",
+                "data": []
+            }
+        
+        # 获取第一个链接的设备ID
+        device_id = account_links[0].device_id
+        logger.info(f"🔍 账号 {account_id} 对应设备ID: {device_id}")
+        
+        # 🔥 关键修复：从数据库获取真实的短信规则
+        sms_rules = db.query(SMSRule).filter(
+            SMSRule.device_id == device_id,
+            SMSRule.is_active == True
+        ).order_by(SMSRule.priority.desc()).all()
+        
+        if not sms_rules:
+            logger.warning(f"⚠️ 设备 {device_id} 没有激活的短信规则")
+            return {
+                "success": False,
+                "message": "没有找到激活的短信规则",
+                "data": []
+            }
+        
+        # 🔥 返回真实的规则数据，不硬编码！
+        rules_data = []
+        for rule in sms_rules:
+            rules_data.append({
+                "id": rule.id,
+                "rule_name": rule.rule_name,
+                "display_count": rule.display_count,  # 🔥 使用数据库中的真实值！
+                "sender_pattern": rule.sender_pattern,
+                "content_pattern": rule.content_pattern,
+                "is_active": rule.is_active,
+                "priority": rule.priority
+            })
+        
+        logger.info(f"✅ 返回 {len(rules_data)} 条短信规则")
+        for rule in rules_data:
+            logger.info(f"📋 规则: {rule['rule_name']}, 显示条数: {rule['display_count']}")
         
         return {
             "success": True,

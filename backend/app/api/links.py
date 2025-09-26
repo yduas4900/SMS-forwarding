@@ -416,7 +416,7 @@ async def get_account_info(
         
         db.commit()
         
-        # 返回账号信息 - 按照前端期望的数据结构
+        # 返回账号信息 - 按照前端期望的数据结构，绝不硬编码！
         return {
             "success": True,
             "data": {
@@ -434,6 +434,7 @@ async def get_account_info(
                     "link_id": link.link_id,
                     "access_count": link.access_count,
                     "max_access_count": link.max_access_count,
+                    "verification_wait_time": link.verification_wait_time,  # 🔥 使用数据库中的真实值！
                     "created_at": link.created_at.isoformat() if link.created_at else None
                 }
             }

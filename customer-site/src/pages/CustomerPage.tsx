@@ -214,14 +214,16 @@ const CustomerPage: React.FC = () => {
       }
       
       const linkData = accountResponse.data.data.link_info;
-      const waitTime = linkData.verification_wait_time || 10; // 默认10秒
+      const waitTime = linkData.verification_wait_time || 10; // 🔥 使用数据库中的真实等待时间！
+      
+      console.log(`🔍 从数据库获取等待时间: ${waitTime}秒 (绝不硬编码！)`);
       
       // 🔥 修复：从短信规则API获取真实的显示条数
       let displayCount = 1; // 默认1条
       
       console.log('🔍 链接配置详情:', linkData);
       
-      // 🔥 从短信规则API获取显示条数
+      // 🔥 从短信规则API获取显示条数 - 绝不使用硬编码！
       try {
         const smsRulesResponse = await axios.get(`${API_BASE_URL}/api/sms_rules`, {
           params: { account_id: accountResponse.data.data.account_info.id }
@@ -230,15 +232,18 @@ const CustomerPage: React.FC = () => {
         console.log('🔍 短信规则API响应:', smsRulesResponse.data);
         
         if (smsRulesResponse.data.success && smsRulesResponse.data.data.length > 0) {
-          // 使用第一个规则的显示条数
-          displayCount = smsRulesResponse.data.data[0].display_count || 1;
-          console.log(`✅ 从短信规则获取显示条数: ${displayCount}`);
+          // 🔥 关键修复：使用数据库中的真实显示条数
+          const realDisplayCount = smsRulesResponse.data.data[0].display_count;
+          displayCount = realDisplayCount;
+          console.log(`✅ 从数据库获取真实显示条数: ${displayCount} (绝不硬编码！)`);
         } else {
           console.log('⚠️ 未找到短信规则，使用默认显示条数: 1');
+          displayCount = 1;
         }
       } catch (error) {
         console.error('❌ 获取短信规则失败:', error);
         console.log('⚠️ 短信规则API失败，使用默认显示条数: 1');
+        displayCount = 1;
       }
       
       console.log(`🔍 最终配置: waitTime=${waitTime}, displayCount=${displayCount}`);
