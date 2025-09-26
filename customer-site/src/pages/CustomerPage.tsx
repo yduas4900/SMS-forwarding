@@ -140,28 +140,123 @@ const CustomerPage: React.FC = () => {
     }
   };
 
-  // 刷新验证码
-  const refreshCodes = () => {
+  // 获取验证码（实现验证码等待时间功能）
+  const getVerificationCodes = async () => {
     if (countdown > 0) return;
     
-    fetchAccountInfo();
-    setCountdown(10);
-    
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-    }
-    
-    intervalRef.current = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-          }
-          return 0;
-        }
-        return prev - 1;
+    try {
+      setLoading(true);
+      
+      // 首先获取链接配置信息
+      const accountResponse = await axios.get(`${API_BASE_URL}/api/get_account_info`, {
+        params: { link_id: currentLinkId }
       });
-    }, 1000);
+      
+      if (!accountResponse.data.success) {
+        message.error('获取链接配置失败');
+        return;
+      }
+      
+      const linkData = accountResponse.data.data.link_info;
+      const waitTime = linkData.verification_wait_time || 0;
+      
+      // 如果配置了等待时间，先显示等待倒计时
+      if (waitTime > 0) {
+        message.info(`正在等待 ${waitTime} 秒以确保获取最新验证码...`);
+        setCountdown(waitTime);
+        
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+        }
+        
+        intervalRef.current = setInterval(() => {
+          setCountdown(prev => {
+            if (prev <= 1) {
+              if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+              }
+              // 等待时间结束后，获取验证码
+              fetchVerificationCode();
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      } else {
+        // 没有等待时间，直接获取验证码
+        await fetchVerificationCode();
+      }
+    } catch (error: any) {
+      console.error('获取验证码失败:', error);
+      message.error('获取验证码失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 实际获取验证码的函数
+  const fetchVerificationCode = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/get_verification_code`, {
+        params: { link_id: currentLinkId }
+      });
+      
+      if (response.data.success) {
+        // 更新账号信息中的验证码
+        if (accountInfo && response.data.data.all_matched_sms) {
+          const newCodes = response.data.data.all_matched_sms.map((sms: any, index: number) => ({
+            id: sms.id || index,
+            code: extractVerificationCode(sms.content) || sms.content.substring(0, 20) + '...',
+            received_at: sms.sms_timestamp || new Date().toISOString(),
+            is_used: false
+          }));
+          
+          setAccountInfo(prev => prev ? {
+            ...prev,
+            verification_codes: newCodes
+          } : null);
+        }
+        
+        message.success('验证码获取成功');
+        setLastRefresh(new Date());
+      } else {
+        message.warning(response.data.message || '暂无新的验证码');
+      }
+    } catch (error: any) {
+      if (error.response?.status === 429) {
+        const retryAfter = error.response.headers['retry-after'];
+        message.warning(`请等待 ${retryAfter} 秒后再试`);
+      } else if (error.response?.status === 403) {
+        message.error('验证码获取次数已达上限');
+      } else {
+        message.error('获取验证码失败');
+      }
+    }
+  };
+
+  // 提取验证码的辅助函数
+  const extractVerificationCode = (content: string): string | null => {
+    const patterns = [
+      /验证码[：:\s]*(\d{4,8})/,
+      /verification code[：:\s]*(\d{4,8})/i,
+      /code[：:\s]*(\d{4,8})/i,
+      /(\d{4,8})[^0-9]*验证码/,
+      /【.*】.*?(\d{4,8})/,
+      /(?:验证码|code|密码)[^0-9]*(\d{4,8})/i
+    ];
+    
+    for (const pattern of patterns) {
+      const match = content.match(pattern);
+      if (match) {
+        return match[1];
+      }
+    }
+    return null;
+  };
+
+  // 刷新账号信息（不获取验证码）
+  const refreshAccountInfo = () => {
+    fetchAccountInfo();
   };
 
   // 组件挂载时获取数据
@@ -362,11 +457,11 @@ const CustomerPage: React.FC = () => {
                     type="primary"
                     size="small"
                     icon={<CheckCircleOutlined />}
-                    onClick={refreshCodes}
+                    onClick={getVerificationCodes}
                     disabled={countdown > 0}
                     loading={loading}
                   >
-                    {countdown > 0 ? `${countdown}s` : '刷新'}
+                    {countdown > 0 ? `等待 ${countdown}s` : '获取验证码'}
                   </Button>
                 </div>
               </div>
