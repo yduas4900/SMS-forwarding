@@ -258,31 +258,43 @@ async def get_verification_code_alias(
                 }
             }
         
-        # 获取该设备的最新短信
+        # 🔥 修复：获取更多短信，确保有足够的短信供选择
         all_sms = db.query(SMS).filter(
             SMS.device_id == link.device_id
-        ).order_by(desc(SMS.sms_timestamp)).limit(10).all()
+        ).order_by(desc(SMS.sms_timestamp)).limit(20).all()  # 增加到20条
         
         logger.info(f"📱 找到 {len(all_sms)} 条短信")
         
-        # 简单的验证码检测逻辑
+        # 🔥 扩展验证码检测逻辑，包含更多关键词
         verification_keywords = [
             "验证码", "verification", "code", "验证", "确认码", "动态码",
-            "安全码", "登录码", "注册码", "找回密码", "身份验证", "123456"
+            "安全码", "登录码", "注册码", "找回密码", "身份验证", "123456",
+            "收到", "国内", "我", "你", "的"  # 添加更多通用关键词
         ]
         
         matched_sms = []
         for sms in all_sms:
             content_lower = sms.content.lower()
+            # 🔥 修复：更宽松的匹配逻辑
+            is_matched = False
             for keyword in verification_keywords:
                 if keyword in content_lower:
-                    matched_sms.append(sms)
+                    is_matched = True
                     break
+            
+            # 🔥 如果没有匹配关键词，但包含数字，也认为是验证码
+            if not is_matched and any(char.isdigit() for char in sms.content):
+                is_matched = True
+            
+            if is_matched:
+                matched_sms.append(sms)
         
-        # 取最多5条最新的匹配短信
-        matched_sms = matched_sms[:5]
+        # 🔥 修复：返回更多匹配短信，确保有足够的选择
+        matched_sms = matched_sms[:10]  # 增加到10条
         
         logger.info(f"✅ 匹配到 {len(matched_sms)} 条验证码短信")
+        for i, sms in enumerate(matched_sms):
+            logger.info(f"📱 短信{i+1}: {sms.content[:50]}... (时间: {sms.sms_timestamp})")
         
         # 🔥 重要：不更新统计，让前端控制
         # link.verification_count += 1

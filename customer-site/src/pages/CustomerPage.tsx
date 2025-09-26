@@ -391,10 +391,10 @@ const CustomerPage: React.FC = () => {
               [selectedSms.id]: waitTime
             }));
             
-            // 🔥 更新占位框状态为已完成
+            // 🔥 更新占位框状态为已完成，并立即显示短信
             setPlaceholderBoxes(prev => prev.map(box => 
               box.index === index 
-                ? { ...box, status: 'completed', message: `第 ${index} 条短信获取成功` }
+                ? { ...box, status: 'completed', message: `第 ${index} 条短信获取成功: ${newCode.code}` }
                 : box
             ));
             
