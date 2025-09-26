@@ -326,27 +326,26 @@ async def get_latest_verification_code(
                 "message": "未找到匹配的短信"
             }
         
-        # 🔥 重大修复：不再要求必须包含验证码，只要匹配规则就返回短信
-        # 从匹配的短信中尝试提取验证码（可选）
-        verification_code = None
+        # 🔥 智能验证码识别：使用新的智能提取服务
+        from ..services.verification_code_extractor import verification_extractor
+        
         verification_sms = matched_sms_list[0]  # 使用第一条匹配的短信
         
-        # 尝试提取验证码（如果有的话）
-        import re
-        patterns = [
-            r'验证码[：:\s]*(\d{4,8})',
-            r'verification code[：:\s]*(\d{4,8})',
-            r'code[：:\s]*(\d{4,8})',
-            r'(\d{4,8})[^0-9]*验证码',
-            r'【.*】.*?(\d{4,8})',
-            r'(?:验证码|code|密码)[^0-9]*(\d{4,8})'
-        ]
+        # 🎯 智能提取验证码，支持国内外短信特征识别
+        verification_analysis = verification_extractor.get_all_possible_codes(
+            verification_sms.content, 
+            verification_sms.sender
+        )
         
-        for pattern in patterns:
-            match = re.search(pattern, verification_sms.content, re.IGNORECASE)
-            if match:
-                verification_code = match.group(1)
-                break
+        # 获取最佳验证码
+        best_code = verification_analysis.get('best_match')
+        verification_code = best_code.code if best_code else None
+        
+        # 记录智能识别结果
+        if best_code:
+            logger.info(f"🎯 智能验证码识别成功: 代码={best_code.code}, 类型={best_code.pattern_type}, 置信度={best_code.confidence:.2f}, 地区={verification_analysis['region']}")
+        else:
+            logger.info(f"❌ 未识别到验证码: 地区={verification_analysis['region']}")
         
         # 🔥 新功能：动态获取最新短信，支持实时更新
         # 不在这里等待，而是返回当前匹配的短信，让前端处理倒计时和动态获取
@@ -373,21 +372,53 @@ async def get_latest_verification_code(
         return {
             "success": True,
             "data": {
-                "verification_code": verification_code,  # 可能为None
+                "verification_code": verification_code,  # 最佳验证码
                 "sender": verification_sms.sender,
                 "content": verification_sms.content,  # 返回完整的短信内容
                 "sms_timestamp": verification_sms.sms_timestamp.isoformat() if verification_sms.sms_timestamp else None,
                 "display_count": display_count,  # 🔥 新增：返回显示条数，用于客户端倍数倍计时
                 "verification_count": link.verification_count,  # 🔥 关键修复：返回更新后的验证码次数
                 "max_verification_count": link.max_verification_count,  # 🔥 关键修复：返回最大次数
-                # 新增：返回所有匹配的短信列表
+                
+                # 🎯 智能验证码识别结果
+                "smart_recognition": {
+                    "region": verification_analysis['region'],  # 识别的地区
+                    "best_code": {
+                        "code": best_code.code,
+                        "confidence": best_code.confidence,
+                        "pattern_type": best_code.pattern_type,
+                        "context": best_code.context
+                    } if best_code else None,
+                    "all_candidates": [
+                        {
+                            "code": result.code,
+                            "confidence": result.confidence,
+                            "pattern_type": result.pattern_type,
+                            "context": result.context
+                        }
+                        for result in (verification_analysis['high_confidence'] + 
+                                     verification_analysis['medium_confidence'] + 
+                                     verification_analysis['low_confidence'])
+                    ]
+                },
+                
+                # 新增：返回所有匹配的短信列表，每条短信都包含智能识别结果
                 "all_matched_sms": [
                     {
                         "id": sms.id,
                         "sender": sms.sender,
                         "content": sms.content,  # 这里返回完整的短信内容
                         "sms_timestamp": sms.sms_timestamp.isoformat() if sms.sms_timestamp else None,
-                        "category": sms.category
+                        "category": sms.category,
+                        # 🎯 为每条短信提供智能识别结果
+                        "verification_codes": [
+                            {
+                                "code": result.code,
+                                "confidence": result.confidence,
+                                "pattern_type": result.pattern_type
+                            }
+                            for result in verification_extractor.extract_verification_codes(sms.content, sms.sender)
+                        ]
                     }
                     for sms in matched_sms_list
                 ]
