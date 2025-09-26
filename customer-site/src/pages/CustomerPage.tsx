@@ -208,22 +208,21 @@ const CustomerPage: React.FC = () => {
       const linkData = accountResponse.data.data.link_info;
       const waitTime = linkData.verification_wait_time || 10; // 默认10秒
       
-      // 🔥 简化：直接使用配置的显示条数，默认为1
-      let displayCount = 1; // 默认显示1条
+      // 🔥 修复：正确获取显示条数
+      // 从管理端截图看，显示条数设置为3，但需要找到正确的字段
+      let displayCount = 1; // 默认1条
       
-      // 尝试获取短信规则，但不依赖它
-      try {
-        const smsRulesResponse = await axios.get(`${API_BASE_URL}/api/sms_rules`, {
-          params: { account_id: accountResponse.data.data.account_info.id }
-        });
-        
-        if (smsRulesResponse.data.success && smsRulesResponse.data.data.length > 0) {
-          displayCount = smsRulesResponse.data.data[0].display_count || 1;
-        }
-      } catch (error) {
-        console.log('获取短信规则失败，使用默认显示条数:', error);
-        // 继续使用默认值
+      // 🔥 尝试从不同字段获取显示条数
+      console.log('🔍 链接配置详情:', linkData);
+      
+      // 可能的字段：verification_wait_time, max_verification_count, 或其他字段
+      if (linkData.max_verification_count && linkData.max_verification_count > 0) {
+        displayCount = Math.min(linkData.max_verification_count, 5); // 最多5条
+      } else if (linkData.verification_wait_time && linkData.verification_wait_time > 1) {
+        displayCount = Math.min(linkData.verification_wait_time, 5); // 最多5条
       }
+      
+      console.log(`🔍 链接配置: waitTime=${waitTime}, displayCount=${displayCount}, max_verification_count=${linkData.max_verification_count}`);
       
       console.log(`🚀 开始渐进式获取 ${displayCount} 条短信，每条间隔 ${waitTime} 秒`);
       
