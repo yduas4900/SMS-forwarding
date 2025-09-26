@@ -70,6 +70,8 @@ const CustomerPage: React.FC = () => {
   const [countdown, setCountdown] = useState(0);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [smsCountdowns, setSmsCountdowns] = useState<{[key: number]: number}>({});
+  const smsIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // 获取链接ID（从URL参数或查询参数）
   const currentLinkId = linkId || searchParams.get('link_id');
@@ -256,7 +258,7 @@ const CustomerPage: React.FC = () => {
     message.info(`开始获取 ${totalCount} 条短信，预计需要 ${totalCountdown} 秒`);
     
     // 立即获取第一条短信
-    fetchSingleSms(currentIndex + 1, retrievedSmsIds, totalCount);
+    fetchSingleSms(currentIndex + 1, retrievedSmsIds, totalCount, waitTime);
     currentIndex++;
     
     // 设置定时器获取后续短信
@@ -269,7 +271,7 @@ const CustomerPage: React.FC = () => {
         const shouldFetchIndex = Math.floor(elapsedTime / waitTime);
         
         if (shouldFetchIndex > currentIndex && currentIndex < totalCount) {
-          fetchSingleSms(currentIndex + 1, retrievedSmsIds, totalCount);
+          fetchSingleSms(currentIndex + 1, retrievedSmsIds, totalCount, waitTime);
           currentIndex++;
           console.log(`⏰ 第 ${currentIndex} 条短信获取时机到达`);
         }
@@ -290,7 +292,7 @@ const CustomerPage: React.FC = () => {
   };
 
   // 🔥 修复后的单条短信获取函数
-  const fetchSingleSms = async (index: number, retrievedSmsIds: Set<number>, totalCount: number) => {
+  const fetchSingleSms = async (index: number, retrievedSmsIds: Set<number>, totalCount: number, waitTime: number) => {
     try {
       console.log(`📱 正在获取第 ${index}/${totalCount} 条短信...`);
       
@@ -325,7 +327,8 @@ const CustomerPage: React.FC = () => {
               is_used: false,
               full_content: latestSms.content,
               sender: latestSms.sender,
-              progressive_index: index // 标记获取顺序
+              progressive_index: index, // 标记获取顺序
+              countdown: waitTime // 添加倒计时
             };
             
             // 添加到验证码列表
@@ -333,6 +336,12 @@ const CustomerPage: React.FC = () => {
               ...prev,
               verification_codes: [...(prev.verification_codes || []), newCode]
             } : null);
+            
+            // 🔥 为这条短信启动倒计时
+            setSmsCountdowns(prev => ({
+              ...prev,
+              [latestSms.id]: waitTime
+            }));
             
             console.log(`✅ 第 ${index} 条短信获取成功: ${newCode.code}`);
             message.success(`第 ${index} 条短信获取成功: ${newCode.code}`);
@@ -388,8 +397,47 @@ const CustomerPage: React.FC = () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
+      if (smsIntervalRef.current) {
+        clearInterval(smsIntervalRef.current);
+      }
     };
   }, [currentLinkId]);
+
+  // 🔥 短信倒计时定时器
+  useEffect(() => {
+    if (Object.keys(smsCountdowns).length > 0) {
+      if (smsIntervalRef.current) {
+        clearInterval(smsIntervalRef.current);
+      }
+      
+      smsIntervalRef.current = setInterval(() => {
+        setSmsCountdowns(prev => {
+          const newCountdowns = { ...prev };
+          let hasActiveCountdown = false;
+          
+          for (const smsId in newCountdowns) {
+            if (newCountdowns[smsId] > 0) {
+              newCountdowns[smsId]--;
+              hasActiveCountdown = true;
+            }
+          }
+          
+          // 如果没有活跃的倒计时，清除定时器
+          if (!hasActiveCountdown && smsIntervalRef.current) {
+            clearInterval(smsIntervalRef.current);
+          }
+          
+          return newCountdowns;
+        });
+      }, 1000);
+    }
+    
+    return () => {
+      if (smsIntervalRef.current) {
+        clearInterval(smsIntervalRef.current);
+      }
+    };
+  }, [smsCountdowns]);
 
   // 格式化时间
   const formatTime = (dateString: string) => {
@@ -494,7 +542,11 @@ const CustomerPage: React.FC = () => {
               <Col xs={24} sm={8} style={{ textAlign: 'center' }}>
                 <Avatar
                   size={80}
-                  src={accountInfo.avatar_url ? `${API_BASE_URL}${accountInfo.avatar_url}` : undefined}
+                  src={accountInfo.avatar_url ? (
+                    accountInfo.avatar_url.startsWith('http') 
+                      ? accountInfo.avatar_url 
+                      : `${API_BASE_URL}${accountInfo.avatar_url}`
+                  ) : undefined}
                   icon={<UserOutlined />}
                   style={{ marginBottom: 16 }}
                 />
@@ -625,6 +677,12 @@ const CustomerPage: React.FC = () => {
                                 {code.is_used && (
                                   <Tag color="default" size="small">已使用</Tag>
                                 )}
+                                {/* 🔥 显示短信倒计时 */}
+                                {smsCountdowns[code.id] > 0 && (
+                                  <Tag color="orange" size="small">
+                                    倒计时 {smsCountdowns[code.id]}s
+                                  </Tag>
+                                )}
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <ClockCircleOutlined style={{ color: freshness.color }} />
@@ -634,6 +692,12 @@ const CustomerPage: React.FC = () => {
                                 <Tag color={freshness.color} size="small">
                                   {freshness.text}
                                 </Tag>
+                                {/* 🔥 显示获取顺序 */}
+                                {code.progressive_index && (
+                                  <Tag color="blue" size="small">
+                                    第{code.progressive_index}条
+                                  </Tag>
+                                )}
                               </div>
                             </Space>
                           </Col>
