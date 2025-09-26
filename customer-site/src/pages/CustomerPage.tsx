@@ -271,13 +271,36 @@ const CustomerPage: React.FC = () => {
       const data = await response.json();
       console.log(`✅ 第 ${smsIndex} 条短信API响应:`, data);
 
-      // 🔥 实时更新验证码获取次数
-      if (data.data?.verification_count !== undefined) {
-        setLinkInfo(prev => prev ? {
-          ...prev,
-          verification_count: data.data.verification_count
-        } : null);
-        console.log(`📊 实时更新验证码次数: ${data.data.verification_count}`);
+      // 🔥 实时更新验证码获取次数 - 修复数据结构处理
+      console.log('🔍 检查API返回的完整数据结构:', JSON.stringify(data, null, 2));
+      
+      if (data.success && data.data) {
+        // 检查是否有verification_count字段
+        if (data.data.verification_count !== undefined) {
+          console.log(`📊 从API获取到验证码次数: ${data.data.verification_count}`);
+          setLinkInfo(prev => {
+            if (prev) {
+              const updated = {
+                ...prev,
+                verification_count: data.data.verification_count
+              };
+              console.log('📊 更新前的linkInfo:', prev);
+              console.log('📊 更新后的linkInfo:', updated);
+              return updated;
+            }
+            return null;
+          });
+        } else {
+          console.warn('⚠️ API响应中没有verification_count字段');
+        }
+        
+        // 同时检查max_verification_count
+        if (data.data.max_verification_count !== undefined) {
+          setLinkInfo(prev => prev ? {
+            ...prev,
+            max_verification_count: data.data.max_verification_count
+          } : null);
+        }
       }
 
       if (data.success && data.data?.all_matched_sms?.length > 0) {
