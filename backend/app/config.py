@@ -37,7 +37,10 @@ class Settings(BaseSettings):
     max_access_attempts: int = 5
     
     # CORS 配置 - 使用字符串，然后分割为列表
-    allowed_origins_str: str = Field(default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001", alias="ALLOWED_ORIGINS")
+    allowed_origins_str: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001", 
+        alias="ALLOWED_ORIGINS"
+    )
     
     @property
     def allowed_origins(self) -> List[str]:
