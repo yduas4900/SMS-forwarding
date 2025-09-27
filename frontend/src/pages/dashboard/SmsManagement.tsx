@@ -172,16 +172,21 @@ const SmsManagement: React.FC = () => {
       const newSmsData = response.data?.sms_list || [];
       const paginationData = response.data?.pagination || {};
       
-      // 🔥 平滑更新数据 - 只在数据真正变化时更新
-      setSmsData(prevData => {
-        // 比较新旧数据，只有真正变化时才更新
-        const hasChanges = JSON.stringify(prevData) !== JSON.stringify(newSmsData);
-        if (hasChanges || isInitialLoad) {
-          console.log('📊 数据更新:', isAutoRefresh ? '自动刷新' : '手动刷新', '新数据条数:', newSmsData.length);
-          return newSmsData;
-        }
-        return prevData;
-      });
+  // 🔥 优化的平滑更新数据 - 使用更高效的比较方式
+  setSmsData(prevData => {
+    // 使用更轻量的比较方式：比较数组长度和最新记录的ID
+    const hasLengthChange = prevData.length !== newSmsData.length;
+    const hasNewData = newSmsData.length > 0 && prevData.length > 0 && 
+                      newSmsData[0]?.id !== prevData[0]?.id;
+    
+    if (hasLengthChange || hasNewData || isInitialLoad) {
+      if (!isAutoRefresh) {
+        console.log('📊 数据更新:', '新数据条数:', newSmsData.length);
+      }
+      return newSmsData;
+    }
+    return prevData;
+  });
       
       setPagination(prev => ({
         ...prev,
