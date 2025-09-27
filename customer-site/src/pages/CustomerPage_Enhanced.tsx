@@ -63,6 +63,8 @@ interface LinkInfo {
   created_at: string;
   verification_wait_time?: number;
   account_id?: number;
+  access_session_interval?: number;
+  last_access_time?: string;
 }
 
 interface CustomerSiteSettings {
@@ -107,7 +109,11 @@ const CustomerPage: React.FC = () => {
     retrievedSmsIds: new Set()
   });
 
+  // 🔥 新增：访问会话间隔倒计时状态
+  const [accessSessionCountdown, setAccessSessionCountdown] = useState<number>(0);
+
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const accessCountdownRef = useRef<NodeJS.Timeout | null>(null);
 
   // 获取链接ID（从URL参数或查询参数）
   const currentLinkId = linkId || searchParams.get('link_id');
@@ -190,6 +196,25 @@ const CustomerPage: React.FC = () => {
         setAccessDenied(false);
         setError(null);
         setLastRefresh(new Date());
+
+        // 🔥 新增：计算访问会话间隔倒计时
+        if (linkData.last_access_time && linkData.access_session_interval) {
+          const lastAccessTime = new Date(linkData.last_access_time);
+          const sessionIntervalMs = linkData.access_session_interval * 60 * 1000; // 分钟转毫秒
+          const elapsedTime = Date.now() - lastAccessTime.getTime();
+          const remainingTime = Math.max(0, sessionIntervalMs - elapsedTime);
+          const remainingSeconds = Math.ceil(remainingTime / 1000);
+          
+          console.log('⏰ 访问会话间隔倒计时计算:', {
+            lastAccessTime: linkData.last_access_time,
+            sessionInterval: linkData.access_session_interval,
+            elapsedMs: elapsedTime,
+            remainingMs: remainingTime,
+            remainingSeconds
+          });
+
+          setAccessSessionCountdown(remainingSeconds);
+        }
 
         // 🔥 关键修复：只在页面刷新时保留短信，新打开页面时不保留
         // 检测是否为页面刷新：通过检查performance.navigation.type
@@ -629,6 +654,53 @@ const CustomerPage: React.FC = () => {
     return { text: `${diffHours}小时前`, color: '#ff4d4f' };
   };
 
+  // 🔥 新增：访问会话间隔倒计时效果
+  useEffect(() => {
+    if (accessSessionCountdown <= 0) return;
+
+    accessCountdownRef.current = setInterval(() => {
+      setAccessSessionCountdown(prev => {
+        const newCountdown = prev - 1;
+        
+        if (newCountdown <= 0) {
+          console.log('⏰ 访问会话间隔倒计时结束，访问次数即将增加');
+          
+          // 🔥 友好提示：倒计时结束时提醒用户访问次数即将增加
+          if (linkInfo) {
+            const currentPercent = Math.round((linkInfo.access_count / linkInfo.max_access_count) * 100);
+            const nextPercent = Math.round(((linkInfo.access_count + 1) / linkInfo.max_access_count) * 100);
+            
+            if (nextPercent >= 100) {
+              message.warning({
+                content: '访问次数即将达到上限！如需继续使用，请联系管理员。',
+                duration: 8,
+                style: {
+                  marginTop: '20vh',
+                },
+              });
+            } else if (nextPercent >= 80) {
+              const remaining = linkInfo.max_access_count - linkInfo.access_count - 1;
+              message.info({
+                content: `提醒：访问次数即将增加，还剩 ${remaining} 次访问机会。`,
+                duration: 5,
+              });
+            }
+          }
+          
+          return 0;
+        }
+        
+        return newCountdown;
+      });
+    }, 1000);
+
+    return () => {
+      if (accessCountdownRef.current) {
+        clearInterval(accessCountdownRef.current);
+      }
+    };
+  }, [accessSessionCountdown, linkInfo]);
+
   // 组件挂载时获取数据
   useEffect(() => {
     fetchAccountInfo();
@@ -637,6 +709,9 @@ const CustomerPage: React.FC = () => {
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+      }
+      if (accessCountdownRef.current) {
+        clearInterval(accessCountdownRef.current);
       }
     };
   }, [currentLinkId]);
@@ -1051,6 +1126,43 @@ const CustomerPage: React.FC = () => {
                     />
                   </Col>
                 </Row>
+
+                {/* 🔥 新增：访问会话间隔倒计时 */}
+                {linkInfo.access_session_interval && accessSessionCountdown > 0 && (
+                  <Row justify="space-between" align="middle" style={{ 
+                    padding: '8px 12px',
+                    backgroundColor: '#fff7e6',
+                    borderRadius: '6px',
+                    border: '1px solid #ffd591'
+                  }}>
+                    <Col>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        会话倒计时: {Math.floor(accessSessionCountdown / 60)}分{accessSessionCountdown % 60}秒后访问次数+1
+                      </Text>
+                    </Col>
+                    <Col>
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '8px' 
+                      }}>
+                        <ClockCircleOutlined style={{ color: '#fa8c16', fontSize: 14 }} />
+                        <Text 
+                          style={{ 
+                            fontSize: 14, 
+                            fontWeight: 'bold', 
+                            color: '#fa8c16',
+                            fontFamily: 'monospace',
+                            minWidth: '40px',
+                            textAlign: 'center'
+                          }}
+                        >
+                          {accessSessionCountdown}s
+                        </Text>
+                      </div>
+                    </Col>
+                  </Row>
+                )}
 
                 {/* 验证码获取统计 */}
                 <Row justify="space-between" align="middle">
