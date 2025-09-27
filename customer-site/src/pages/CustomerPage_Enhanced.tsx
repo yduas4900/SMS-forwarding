@@ -202,6 +202,13 @@ const CustomerPage: React.FC = () => {
           isLimitReached: linkData.access_count >= linkData.max_access_count
         });
 
+        // 🔥 新增：页面加载时也检查验证码次数限制
+        console.log('🔍 页面加载时检查验证码次数限制:', {
+          verificationCurrent: linkData.verification_count,
+          verificationMax: linkData.max_verification_count,
+          isVerificationLimitReached: linkData.verification_count !== undefined && linkData.max_verification_count !== undefined && linkData.verification_count >= linkData.max_verification_count
+        });
+
         if (linkData.access_count >= linkData.max_access_count) {
           console.log('🚫 页面加载时发现访问次数已达上限，立即跳转到访问受限页面');
           setAccessDenied(true);
@@ -1060,10 +1067,16 @@ const CustomerPage: React.FC = () => {
                     size="small"
                     icon={<CheckCircleOutlined />}
                     onClick={startProgressiveRetrieval}
-                    disabled={progressiveRetrievalState.isActive}
+                    disabled={
+                      progressiveRetrievalState.isActive || 
+                      (linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && 
+                       linkInfo.verification_count >= linkInfo.max_verification_count)
+                    }
                     loading={loading}
                   >
-                    {progressiveRetrievalState.isActive ? '获取中...' : '获取验证码'}
+                    {progressiveRetrievalState.isActive ? '获取中...' : 
+                     (linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && 
+                      linkInfo.verification_count >= linkInfo.max_verification_count) ? '已达上限' : '获取验证码'}
                   </Button>
                 </div>
               </div>
@@ -1170,6 +1183,23 @@ const CustomerPage: React.FC = () => {
               </div>
             )}
 
+            {/* 🔥 新增：验证码次数达到上限时的提示 */}
+            {linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && 
+             linkInfo.verification_count >= linkInfo.max_verification_count && (
+              <Alert
+                message="验证码获取次数已达上限"
+                description="您已达到验证码获取次数的上限，无法继续获取新的验证码。如需继续使用，请联系管理员。"
+                type="warning"
+                showIcon
+                style={{ 
+                  marginBottom: 16,
+                  borderRadius: 8,
+                  border: '2px solid #faad14'
+                }}
+                icon={<ExclamationCircleOutlined />}
+              />
+            )}
+
             {/* 验证码列表 */}
             {accountInfo.verification_codes && accountInfo.verification_codes.length > 0 ? (
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
@@ -1245,7 +1275,10 @@ const CustomerPage: React.FC = () => {
                 <MobileOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
                 <Title level={4} type="secondary">暂无验证码</Title>
                 <Paragraph type="secondary">
-                  点击"获取验证码"按钮开始获取短信验证码
+                  {linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && 
+                   linkInfo.verification_count >= linkInfo.max_verification_count ? 
+                   '验证码获取次数已达上限，无法继续获取新的验证码。' : 
+                   '点击"获取验证码"按钮开始获取短信验证码'}
                 </Paragraph>
               </div>
             )}
