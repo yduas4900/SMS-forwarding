@@ -90,9 +90,13 @@ const CustomerSiteSettings: React.FC = () => {
 
   // 保存设置
   const handleSave = async (values: CustomerSiteSettings) => {
+    console.log('🔄 开始保存客户端设置:', values);
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
+      console.log('🔑 使用Token:', token ? '已获取' : '未获取');
+      
+      console.log('📤 发送API请求到: /api/settings/customer-site');
       const response = await axios.post('/api/settings/customer-site', values, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -100,18 +104,27 @@ const CustomerSiteSettings: React.FC = () => {
         }
       });
       
+      console.log('📥 API响应:', response.data);
+      
       if (response.data.success) {
         setSettings(values);
         message.success('客户端设置保存成功！');
+        console.log('✅ 设置保存成功');
       } else {
+        console.error('❌ 保存失败:', response.data.message);
         message.error(response.data.message || '保存失败，请重试');
       }
     } catch (error) {
-      console.error('保存客户端设置失败:', error);
+      console.error('❌ 保存客户端设置失败:', error);
+      console.error('错误详情:', error.response?.data);
+      console.error('错误状态码:', error.response?.status);
+      
       if (error.response?.status === 401) {
         message.error('登录已过期，请重新登录');
       } else if (error.response?.status === 403) {
         message.error('权限不足，无法修改客户端设置');
+      } else if (error.response?.status === 404) {
+        message.error('API端点不存在，请检查后端配置');
       } else {
         message.error('保存失败，请检查网络连接后重试');
       }
