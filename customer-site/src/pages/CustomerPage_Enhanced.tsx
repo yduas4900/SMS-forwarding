@@ -1183,26 +1183,25 @@ const CustomerPage: React.FC = () => {
               </div>
             )}
 
-            {/* 🔥 新增：验证码次数达到上限时的提示 */}
-            {linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && 
-             linkInfo.verification_count >= linkInfo.max_verification_count && (
-              <Alert
-                message="验证码获取次数已达上限"
-                description="您已达到验证码获取次数的上限，无法继续获取新的验证码。如需继续使用，请联系管理员。"
-                type="warning"
-                showIcon
-                style={{ 
-                  marginBottom: 16,
-                  borderRadius: 8,
-                  border: '2px solid #faad14'
-                }}
-                icon={<ExclamationCircleOutlined />}
-              />
-            )}
-
             {/* 验证码列表 */}
             {accountInfo.verification_codes && accountInfo.verification_codes.length > 0 ? (
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                {/* 🔥 修复：验证码次数达到上限时的提示 - 放在验证码列表内部，避免布局变化 */}
+                {linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && 
+                 linkInfo.verification_count >= linkInfo.max_verification_count && (
+                  <Alert
+                    message="验证码获取次数已达上限"
+                    description="您已达到验证码获取次数的上限，无法继续获取新的验证码。如需继续使用，请联系管理员。"
+                    type="warning"
+                    showIcon
+                    style={{ 
+                      borderRadius: 8,
+                      border: '2px solid #faad14'
+                    }}
+                    icon={<ExclamationCircleOutlined />}
+                  />
+                )}
+                
                 {accountInfo.verification_codes
                   .sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime())
                   .map((code) => {
@@ -1272,14 +1271,25 @@ const CustomerPage: React.FC = () => {
               </Space>
             ) : (
               <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                <MobileOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
-                <Title level={4} type="secondary">暂无验证码</Title>
-                <Paragraph type="secondary">
-                  {linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && 
-                   linkInfo.verification_count >= linkInfo.max_verification_count ? 
-                   '验证码获取次数已达上限，无法继续获取新的验证码。' : 
-                   '点击"获取验证码"按钮开始获取短信验证码'}
-                </Paragraph>
+                {/* 🔥 修复：验证码次数达到上限时的提示 - 在空状态中显示，避免布局变化 */}
+                {linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && 
+                 linkInfo.verification_count >= linkInfo.max_verification_count ? (
+                  <div>
+                    <ExclamationCircleOutlined style={{ fontSize: 48, color: '#faad14', marginBottom: 16 }} />
+                    <Title level={4} style={{ color: '#faad14' }}>验证码获取次数已达上限</Title>
+                    <Paragraph type="secondary">
+                      您已达到验证码获取次数的上限，无法继续获取新的验证码。如需继续使用，请联系管理员。
+                    </Paragraph>
+                  </div>
+                ) : (
+                  <div>
+                    <MobileOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
+                    <Title level={4} type="secondary">暂无验证码</Title>
+                    <Paragraph type="secondary">
+                      点击"获取验证码"按钮开始获取短信验证码
+                    </Paragraph>
+                  </div>
+                )}
               </div>
             )}
           </Card>
