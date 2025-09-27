@@ -297,16 +297,20 @@ const CustomerPage: React.FC = () => {
       const data = await response.json();
       console.log(`✅ 第 ${smsIndex} 条短信API响应:`, data);
 
-      if (data.success && data.data?.all_matched_sms?.length > 0) {
-        // 🔥 关键修复：实时更新统计数据
-        if (data.data.verification_count !== undefined && data.data.max_verification_count !== undefined) {
-          setLinkInfo(prev => prev ? {
-            ...prev,
-            verification_count: data.data.verification_count,
-            max_verification_count: data.data.max_verification_count
-          } : null);
+      if (data.success) {
+        // 🔥 关键修复：无论是否有短信都要更新统计数据
+        if (data.data?.verification_count !== undefined && data.data?.max_verification_count !== undefined) {
+          console.log(`📊 API返回统计数据: ${data.data.verification_count}/${data.data.max_verification_count}`);
           
-          console.log(`📊 实时更新统计数据: ${data.data.verification_count}/${data.data.max_verification_count}`);
+          setLinkInfo(prev => {
+            const updated = prev ? {
+              ...prev,
+              verification_count: data.data.verification_count,
+              max_verification_count: data.data.max_verification_count
+            } : null;
+            console.log(`📊 更新后的linkInfo:`, updated);
+            return updated;
+          });
           
           // 🔥 友好提示：检查是否达到阈值
           if (data.data.verification_count >= data.data.max_verification_count) {
@@ -327,52 +331,69 @@ const CustomerPage: React.FC = () => {
           }
         }
 
-        // 过滤掉已经获取过的短信，获取最新的
-        const newSms = data.data.all_matched_sms.filter((sms: any) => 
-          !progressiveRetrievalState.retrievedSmsIds.has(sms.id)
-        );
+        if (data.data?.all_matched_sms?.length > 0) {
+          // 过滤掉已经获取过的短信，获取最新的
+          const newSms = data.data.all_matched_sms.filter((sms: any) => 
+            !progressiveRetrievalState.retrievedSmsIds.has(sms.id)
+          );
 
-        if (newSms.length > 0) {
-          const latestSms = newSms[0]; // 获取最新的一条
-          
-          // 提取验证码
-          const extractedCode = extractVerificationCode(latestSms.content);
-          const newCode: VerificationCode = {
-            id: latestSms.id,
-            code: extractedCode || latestSms.content,
-            received_at: latestSms.sms_timestamp || new Date().toISOString(),
-            is_used: false,
-            full_content: latestSms.content,
-            sender: latestSms.sender,
-            progressive_index: smsIndex
-          };
-          
-          // 更新对应槽位的状态
-          setProgressiveRetrievalState(prev => ({
-            ...prev,
-            smsSlots: prev.smsSlots.map(slot => 
-              slot.index === smsIndex 
-                ? { 
-                    ...slot, 
-                    status: 'completed', 
-                    sms: newCode,
-                    message: `第 ${smsIndex} 条短信已获取`
-                  }
-                : slot
-            ),
-            retrievedSmsIds: new Set([...prev.retrievedSmsIds, latestSms.id])
-          }));
+          if (newSms.length > 0) {
+            const latestSms = newSms[0]; // 获取最新的一条
+            
+            // 提取验证码
+            const extractedCode = extractVerificationCode(latestSms.content);
+            const newCode: VerificationCode = {
+              id: latestSms.id,
+              code: extractedCode || latestSms.content,
+              received_at: latestSms.sms_timestamp || new Date().toISOString(),
+              is_used: false,
+              full_content: latestSms.content,
+              sender: latestSms.sender,
+              progressive_index: smsIndex
+            };
+            
+            // 更新对应槽位的状态
+            setProgressiveRetrievalState(prev => ({
+              ...prev,
+              smsSlots: prev.smsSlots.map(slot => 
+                slot.index === smsIndex 
+                  ? { 
+                      ...slot, 
+                      status: 'completed', 
+                      sms: newCode,
+                      message: `第 ${smsIndex} 条短信已获取`
+                    }
+                  : slot
+              ),
+              retrievedSmsIds: new Set([...prev.retrievedSmsIds, latestSms.id])
+            }));
 
-          // 添加到短信列表
-          setAccountInfo(prev => prev ? {
-            ...prev,
-            verification_codes: [...(prev.verification_codes || []), newCode]
-          } : null);
+            // 添加到短信列表
+            setAccountInfo(prev => prev ? {
+              ...prev,
+              verification_codes: [...(prev.verification_codes || []), newCode]
+            } : null);
 
-          console.log(`📱 第 ${smsIndex} 条短信获取成功:`, newCode.code);
-          message.success(`第 ${smsIndex} 条短信获取成功: ${newCode.code}`);
+            console.log(`📱 第 ${smsIndex} 条短信获取成功:`, newCode.code);
+            message.success(`第 ${smsIndex} 条短信获取成功: ${newCode.code}`);
+          } else {
+            // 没有新短信，标记为完成但无内容
+            setProgressiveRetrievalState(prev => ({
+              ...prev,
+              smsSlots: prev.smsSlots.map(slot => 
+                slot.index === smsIndex 
+                  ? { 
+                      ...slot, 
+                      status: 'completed',
+                      message: `第 ${smsIndex} 条短信：无新内容`
+                    }
+                  : slot
+              )
+            }));
+            console.log(`⚠️ 第 ${smsIndex} 条短信: 没有新的短信`);
+          }
         } else {
-          // 没有新短信，标记为完成但无内容
+          // 没有匹配的短信，标记为完成
           setProgressiveRetrievalState(prev => ({
             ...prev,
             smsSlots: prev.smsSlots.map(slot => 
@@ -380,12 +401,12 @@ const CustomerPage: React.FC = () => {
                 ? { 
                     ...slot, 
                     status: 'completed',
-                    message: `第 ${smsIndex} 条短信：无新内容`
+                    message: `第 ${smsIndex} 条短信：无匹配短信`
                   }
                 : slot
             )
           }));
-          console.log(`⚠️ 第 ${smsIndex} 条短信: 没有新的短信`);
+          console.log(`⚠️ 第 ${smsIndex} 条短信: 无匹配短信`);
         }
       } else {
         // API失败，标记为完成
