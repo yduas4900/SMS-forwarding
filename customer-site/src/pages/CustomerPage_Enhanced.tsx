@@ -58,8 +58,11 @@ interface LinkInfo {
   link_id: string;
   access_count: number;
   max_access_count: number;
+  verification_count?: number;
+  max_verification_count?: number;
   created_at: string;
   verification_wait_time?: number;
+  account_id?: number;
 }
 
 interface CustomerSiteSettings {
@@ -887,7 +890,7 @@ const CustomerPage: React.FC = () => {
             )}
           </Card>
 
-          {/* 访问统计 */}
+          {/* 访问和验证码统计 */}
           {linkInfo && (
             <Card
               size="small"
@@ -897,23 +900,59 @@ const CustomerPage: React.FC = () => {
                 background: 'rgba(255,255,255,0.9)'
               }}
             >
-              <Row justify="space-between" align="middle">
-                <Col>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    访问次数: {linkInfo.access_count} / {linkInfo.max_access_count}
-                  </Text>
-                </Col>
-                <Col>
-                  <Progress
-                    percent={Math.round((linkInfo.access_count / linkInfo.max_access_count) * 100)}
-                    size="small"
-                    style={{ width: 100 }}
-                    strokeColor={
-                      linkInfo.access_count >= linkInfo.max_access_count ? '#ff4d4f' : '#1890ff'
-                    }
-                  />
-                </Col>
-              </Row>
+              <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                {/* 访问次数统计 */}
+                <Row justify="space-between" align="middle">
+                  <Col>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      访问次数: {linkInfo.access_count} / {linkInfo.max_access_count}
+                    </Text>
+                  </Col>
+                  <Col>
+                    <Progress
+                      percent={Math.round((linkInfo.access_count / linkInfo.max_access_count) * 100)}
+                      size="small"
+                      style={{ width: 100 }}
+                      strokeColor={
+                        linkInfo.access_count >= linkInfo.max_access_count ? '#ff4d4f' : '#1890ff'
+                      }
+                    />
+                  </Col>
+                </Row>
+
+                {/* 验证码获取统计 */}
+                <Row justify="space-between" align="middle">
+                  <Col>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      验证码次数: {linkInfo.verification_count || 0} / {linkInfo.max_verification_count || 0}
+                    </Text>
+                  </Col>
+                  <Col>
+                    <Progress
+                      percent={linkInfo.max_verification_count ? Math.round(((linkInfo.verification_count || 0) / linkInfo.max_verification_count) * 100) : 0}
+                      size="small"
+                      style={{ width: 100 }}
+                      strokeColor={
+                        (linkInfo.verification_count || 0) >= (linkInfo.max_verification_count || 0) ? '#ff4d4f' : '#52c41a'
+                      }
+                    />
+                  </Col>
+                </Row>
+
+                {/* 总体使用情况 */}
+                <Row justify="space-between" align="middle" style={{ paddingTop: 8, borderTop: '1px solid #f0f0f0' }}>
+                  <Col>
+                    <Text type="secondary" style={{ fontSize: 11 }}>
+                      总使用率: {Math.round(((linkInfo.access_count + (linkInfo.verification_count || 0)) / (linkInfo.max_access_count + (linkInfo.max_verification_count || 0))) * 100)}%
+                    </Text>
+                  </Col>
+                  <Col>
+                    <Text type="secondary" style={{ fontSize: 11 }}>
+                      创建时间: {new Date(linkInfo.created_at).toLocaleDateString('zh-CN')}
+                    </Text>
+                  </Col>
+                </Row>
+              </Space>
             </Card>
           )}
 
