@@ -585,7 +585,12 @@ const CustomerPage: React.FC = () => {
             >
               <div 
                 dangerouslySetInnerHTML={{ __html: customerSettings.customerSiteWelcomeText }}
-                style={{ textAlign: 'center' }}
+                style={{ 
+                  textAlign: 'center',
+                  lineHeight: '1.8',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word'
+                }}
               />
             </Card>
           )}
