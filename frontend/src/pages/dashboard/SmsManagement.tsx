@@ -123,8 +123,16 @@ const SmsManagement: React.FC = () => {
   const [ruleForm] = Form.useForm();
   const [quickForwardForm] = Form.useForm();
 
-  const fetchSmsData = useCallback(async () => {
-    setLoading(true);
+  // 🔥 平滑数据更新 - 避免明显的刷新感觉
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+
+  const fetchSmsData = useCallback(async (isAutoRefresh = false) => {
+    // 🔥 只在初始加载或手动刷新时显示loading
+    if (!isAutoRefresh) {
+      setLoading(true);
+    }
+    
     try {
       const params: any = {
         page: pagination.current,
@@ -160,21 +168,40 @@ const SmsManagement: React.FC = () => {
       const response = await smsAPI.getSmsList(params);
       
       // 修复数据结构匹配
-      const smsData = response.data?.sms_list || [];
+      const newSmsData = response.data?.sms_list || [];
       const paginationData = response.data?.pagination || {};
       
-      setSmsData(smsData);
+      // 🔥 平滑更新数据 - 只在数据真正变化时更新
+      setSmsData(prevData => {
+        // 比较新旧数据，只有真正变化时才更新
+        const hasChanges = JSON.stringify(prevData) !== JSON.stringify(newSmsData);
+        if (hasChanges || isInitialLoad) {
+          console.log('📊 数据更新:', isAutoRefresh ? '自动刷新' : '手动刷新', '新数据条数:', newSmsData.length);
+          return newSmsData;
+        }
+        return prevData;
+      });
+      
       setPagination(prev => ({
         ...prev,
         total: paginationData.total || 0
       }));
+      
+      if (isInitialLoad) {
+        setIsInitialLoad(false);
+      }
+      
     } catch (error: any) {
       console.error('获取短信数据失败:', error);
-      message.error('获取短信数据失败: ' + (error.response?.data?.detail || error.message || '未知错误'));
+      if (!isAutoRefresh) {
+        message.error('获取短信数据失败: ' + (error.response?.data?.detail || error.message || '未知错误'));
+      }
     } finally {
-      setLoading(false);
+      if (!isAutoRefresh) {
+        setLoading(false);
+      }
     }
-  }, [pagination.current, pagination.pageSize, filters]);
+  }, [pagination.current, pagination.pageSize, filters, isInitialLoad]);
 
   const fetchDevices = async () => {
     try {
@@ -212,6 +239,23 @@ const SmsManagement: React.FC = () => {
     fetchForwardTargets();
     fetchRules();
   }, [pagination.current, pagination.pageSize, fetchSmsData]);
+
+  // 🔥 设置自动刷新定时器 - 每2秒静默刷新一次，像股票数据一样实时更新
+  useEffect(() => {
+    if (!autoRefreshEnabled) return;
+
+    const autoRefreshInterval = setInterval(() => {
+      // 只在没有模态框打开时进行自动刷新
+      if (!detailModalVisible && !ruleModalVisible && !quickForwardModalVisible) {
+        console.log('🔄 自动刷新短信数据...');
+        fetchSmsData(true); // 传入true表示是自动刷新
+      }
+    }, 2000); // 每2秒刷新一次，提供股票级别的实时体验
+
+    return () => {
+      clearInterval(autoRefreshInterval);
+    };
+  }, [autoRefreshEnabled, detailModalVisible, ruleModalVisible, quickForwardModalVisible, fetchSmsData]);
 
   // 获取设备显示名称
   const getDeviceDisplayName = (device: Device) => {
@@ -535,10 +579,22 @@ const SmsManagement: React.FC = () => {
   return (
     <div>
       <Card>
-        <div style={{ marginBottom: 16 }}>
-          <Title level={4}>
+        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Title level={4} style={{ margin: 0 }}>
             <MessageOutlined /> 短信管理
           </Title>
+          <Space>
+            <span style={{ fontSize: 12, color: '#666' }}>
+              {autoRefreshEnabled ? '🔄 实时更新中 (每2秒)' : '⏸️ 自动刷新已暂停'}
+            </span>
+            <Switch
+              checked={autoRefreshEnabled}
+              onChange={setAutoRefreshEnabled}
+              checkedChildren="实时"
+              unCheckedChildren="手动"
+              size="small"
+            />
+          </Space>
         </div>
 
         {/* 搜索筛选区域 */}
