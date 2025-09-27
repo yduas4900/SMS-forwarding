@@ -185,6 +185,7 @@ async def get_account_info(
         link_data = {
             "id": link.id,
             "link_id": link.link_id,
+            "account_id": link.account_id,  # 🔥 关键修复：添加account_id字段
             "access_count": link.access_count,
             "max_access_count": link.max_access_count,
             "verification_count": link.verification_count,
