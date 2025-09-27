@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Card,
   Form,
@@ -17,7 +17,9 @@ import {
   Tabs,
   Upload,
   ColorPicker,
-  Spin
+  Spin,
+  Modal,
+  Slider
 } from 'antd';
 import {
   SaveOutlined,
@@ -25,7 +27,16 @@ import {
   EyeOutlined,
   UploadOutlined,
   BgColorsOutlined,
-  EditOutlined
+  EditOutlined,
+  PictureOutlined,
+  FontColorsOutlined,
+  FontSizeOutlined,
+  BoldOutlined,
+  ItalicOutlined,
+  UnderlineOutlined,
+  AlignLeftOutlined,
+  AlignCenterOutlined,
+  AlignRightOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
 
@@ -153,8 +164,46 @@ const CustomerSiteSettings: React.FC = () => {
     message.info('预览功能开发中...');
   };
 
-  // HTML编辑器工具栏
-  const insertHtmlTag = (tag: string, textAreaId: string) => {
+  // 富文本编辑器状态
+  const [imageUploadModal, setImageUploadModal] = useState(false);
+  const [colorPickerModal, setColorPickerModal] = useState(false);
+  const [currentTextAreaId, setCurrentTextAreaId] = useState('');
+  const [selectedColor, setSelectedColor] = useState('#000000');
+  const [fontSize, setFontSize] = useState(16);
+  const [fontFamily, setFontFamily] = useState('Arial');
+
+  // 图片上传处理
+  const handleImageUpload = async (file: any) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post('/api/images/upload', formData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      if (response.data.success) {
+        const imageUrl = response.data.data.url;
+        insertHtmlTag('img', currentTextAreaId, { imageUrl });
+        message.success('图片上传成功！');
+        setImageUploadModal(false);
+      } else {
+        message.error('图片上传失败');
+      }
+    } catch (error) {
+      console.error('图片上传失败:', error);
+      message.error('图片上传失败，请重试');
+    }
+    
+    return false; // 阻止默认上传行为
+  };
+
+  // 增强的HTML编辑器工具栏
+  const insertHtmlTag = (tag: string, textAreaId: string, options: any = {}) => {
     const textArea = document.getElementById(textAreaId) as HTMLTextAreaElement;
     if (textArea) {
       const start = textArea.selectionStart;
@@ -163,26 +212,58 @@ const CustomerSiteSettings: React.FC = () => {
       
       let insertText = '';
       switch (tag) {
+        case 'h1':
+          insertText = `<h1 style="color: ${selectedColor}; font-family: ${fontFamily};">${selectedText || '主标题'}</h1>`;
+          break;
         case 'h2':
-          insertText = `<h2>${selectedText || '标题'}</h2>`;
+          insertText = `<h2 style="color: ${selectedColor}; font-family: ${fontFamily};">${selectedText || '副标题'}</h2>`;
+          break;
+        case 'h3':
+          insertText = `<h3 style="color: ${selectedColor}; font-family: ${fontFamily};">${selectedText || '小标题'}</h3>`;
           break;
         case 'p':
-          insertText = `<p>${selectedText || '段落文本'}</p>`;
+          insertText = `<p style="color: ${selectedColor}; font-size: ${fontSize}px; font-family: ${fontFamily};">${selectedText || '段落文本'}</p>`;
           break;
         case 'strong':
-          insertText = `<strong>${selectedText || '粗体文本'}</strong>`;
+          insertText = `<strong style="color: ${selectedColor};">${selectedText || '粗体文本'}</strong>`;
           break;
         case 'em':
-          insertText = `<em>${selectedText || '斜体文本'}</em>`;
+          insertText = `<em style="color: ${selectedColor};">${selectedText || '斜体文本'}</em>`;
+          break;
+        case 'u':
+          insertText = `<u style="color: ${selectedColor};">${selectedText || '下划线文本'}</u>`;
           break;
         case 'ul':
-          insertText = `<ul><li>${selectedText || '列表项'}</li></ul>`;
+          insertText = `<ul style="color: ${selectedColor};"><li>${selectedText || '列表项'}</li></ul>`;
           break;
         case 'ol':
-          insertText = `<ol><li>${selectedText || '列表项'}</li></ol>`;
+          insertText = `<ol style="color: ${selectedColor};"><li>${selectedText || '列表项'}</li></ol>`;
+          break;
+        case 'center':
+          insertText = `<div style="text-align: center; color: ${selectedColor};">${selectedText || '居中文本'}</div>`;
+          break;
+        case 'left':
+          insertText = `<div style="text-align: left; color: ${selectedColor};">${selectedText || '左对齐文本'}</div>`;
+          break;
+        case 'right':
+          insertText = `<div style="text-align: right; color: ${selectedColor};">${selectedText || '右对齐文本'}</div>`;
+          break;
+        case 'img':
+          if (options.imageUrl) {
+            insertText = `<img src="${options.imageUrl}" alt="上传的图片" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;" />`;
+          }
+          break;
+        case 'link':
+          const url = prompt('请输入链接地址:');
+          if (url) {
+            insertText = `<a href="${url}" style="color: ${selectedColor};" target="_blank">${selectedText || '链接文本'}</a>`;
+          }
           break;
         case 'br':
           insertText = '<br>';
+          break;
+        case 'hr':
+          insertText = '<hr style="border: 1px solid #ddd; margin: 20px 0;">';
           break;
         default:
           insertText = selectedText;
@@ -196,25 +277,123 @@ const CustomerSiteSettings: React.FC = () => {
     }
   };
 
-  // HTML编辑工具栏组件
-  const HtmlToolbar: React.FC<{ textAreaId: string }> = ({ textAreaId }) => (
+  // 增强的HTML编辑工具栏组件
+  const EnhancedHtmlToolbar: React.FC<{ textAreaId: string }> = ({ textAreaId }) => (
     <div style={{ 
       marginBottom: 8, 
-      padding: '8px 12px', 
+      padding: '12px', 
       background: '#fafafa', 
       border: '1px solid #d9d9d9',
       borderRadius: '6px 6px 0 0',
       borderBottom: 'none'
     }}>
-      <Space size="small">
-        <Button size="small" onClick={() => insertHtmlTag('h2', textAreaId)}>H2</Button>
-        <Button size="small" onClick={() => insertHtmlTag('p', textAreaId)}>段落</Button>
-        <Button size="small" onClick={() => insertHtmlTag('strong', textAreaId)}>粗体</Button>
-        <Button size="small" onClick={() => insertHtmlTag('em', textAreaId)}>斜体</Button>
-        <Button size="small" onClick={() => insertHtmlTag('ul', textAreaId)}>无序列表</Button>
-        <Button size="small" onClick={() => insertHtmlTag('ol', textAreaId)}>有序列表</Button>
-        <Button size="small" onClick={() => insertHtmlTag('br', textAreaId)}>换行</Button>
-      </Space>
+      {/* 第一行：标题和格式 */}
+      <div style={{ marginBottom: 8 }}>
+        <Space size="small" wrap>
+          <Button size="small" icon={<FontSizeOutlined />} onClick={() => insertHtmlTag('h1', textAreaId)}>H1</Button>
+          <Button size="small" icon={<FontSizeOutlined />} onClick={() => insertHtmlTag('h2', textAreaId)}>H2</Button>
+          <Button size="small" icon={<FontSizeOutlined />} onClick={() => insertHtmlTag('h3', textAreaId)}>H3</Button>
+          <Button size="small" onClick={() => insertHtmlTag('p', textAreaId)}>段落</Button>
+          <Divider type="vertical" />
+          <Button size="small" icon={<BoldOutlined />} onClick={() => insertHtmlTag('strong', textAreaId)}>粗体</Button>
+          <Button size="small" icon={<ItalicOutlined />} onClick={() => insertHtmlTag('em', textAreaId)}>斜体</Button>
+          <Button size="small" icon={<UnderlineOutlined />} onClick={() => insertHtmlTag('u', textAreaId)}>下划线</Button>
+        </Space>
+      </div>
+
+      {/* 第二行：对齐和列表 */}
+      <div style={{ marginBottom: 8 }}>
+        <Space size="small" wrap>
+          <Button size="small" icon={<AlignLeftOutlined />} onClick={() => insertHtmlTag('left', textAreaId)}>左对齐</Button>
+          <Button size="small" icon={<AlignCenterOutlined />} onClick={() => insertHtmlTag('center', textAreaId)}>居中</Button>
+          <Button size="small" icon={<AlignRightOutlined />} onClick={() => insertHtmlTag('right', textAreaId)}>右对齐</Button>
+          <Divider type="vertical" />
+          <Button size="small" onClick={() => insertHtmlTag('ul', textAreaId)}>无序列表</Button>
+          <Button size="small" onClick={() => insertHtmlTag('ol', textAreaId)}>有序列表</Button>
+          <Button size="small" onClick={() => insertHtmlTag('link', textAreaId)}>链接</Button>
+        </Space>
+      </div>
+
+      {/* 第三行：颜色、字体和媒体 */}
+      <div>
+        <Space size="small" wrap>
+          <ColorPicker
+            value={selectedColor}
+            onChange={(color) => setSelectedColor(color.toHexString())}
+            size="small"
+          >
+            <Button size="small" icon={<FontColorsOutlined />}>
+              文字颜色
+            </Button>
+          </ColorPicker>
+          
+          <Select
+            size="small"
+            value={fontFamily}
+            onChange={setFontFamily}
+            style={{ width: 120 }}
+          >
+            <Option value="Arial">Arial</Option>
+            <Option value="Microsoft YaHei">微软雅黑</Option>
+            <Option value="SimSun">宋体</Option>
+            <Option value="SimHei">黑体</Option>
+            <Option value="KaiTi">楷体</Option>
+            <Option value="Georgia">Georgia</Option>
+            <Option value="Times New Roman">Times</Option>
+          </Select>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 12 }}>字号:</span>
+            <Slider
+              min={12}
+              max={36}
+              value={fontSize}
+              onChange={setFontSize}
+              style={{ width: 80 }}
+            />
+            <span style={{ fontSize: 12, minWidth: 30 }}>{fontSize}px</span>
+          </div>
+
+          <Divider type="vertical" />
+          
+          <Upload
+            beforeUpload={handleImageUpload}
+            showUploadList={false}
+            accept="image/*"
+          >
+            <Button 
+              size="small" 
+              icon={<PictureOutlined />}
+              onClick={() => setCurrentTextAreaId(textAreaId)}
+            >
+              插入图片
+            </Button>
+          </Upload>
+
+          <Button size="small" onClick={() => insertHtmlTag('br', textAreaId)}>换行</Button>
+          <Button size="small" onClick={() => insertHtmlTag('hr', textAreaId)}>分割线</Button>
+        </Space>
+      </div>
+
+      {/* 样式预览 */}
+      <div style={{ 
+        marginTop: 8, 
+        padding: 8, 
+        background: '#fff', 
+        border: '1px solid #e8e8e8', 
+        borderRadius: 4,
+        fontSize: 12
+      }}>
+        <span>当前样式预览: </span>
+        <span style={{ 
+          color: selectedColor, 
+          fontSize: `${fontSize}px`, 
+          fontFamily: fontFamily,
+          fontWeight: 'bold'
+        }}>
+          示例文字 Sample Text
+        </span>
+      </div>
     </div>
   );
 
@@ -282,15 +461,15 @@ const CustomerSiteSettings: React.FC = () => {
         >
           <Form.Item
             name="customerSiteWelcomeText"
-            label="欢迎文本（支持HTML）"
-            extra="支持HTML标签，用于在客户端页面顶部显示欢迎信息"
+            label="欢迎文本（富文本编辑器）"
+            extra="支持富文本编辑，包括字体、颜色、图片等，用于在客户端页面顶部显示欢迎信息"
           >
             <div>
-              <HtmlToolbar textAreaId="textarea-customerSiteWelcomeText" />
+              <EnhancedHtmlToolbar textAreaId="textarea-customerSiteWelcomeText" />
               <TextArea
                 id="textarea-customerSiteWelcomeText"
-                rows={6}
-                placeholder="输入欢迎文本，支持HTML标签"
+                rows={8}
+                placeholder="输入欢迎文本，使用上方工具栏进行富文本编辑"
                 style={{ borderRadius: '0 0 6px 6px' }}
               />
             </div>
@@ -298,15 +477,15 @@ const CustomerSiteSettings: React.FC = () => {
 
           <Form.Item
             name="customerSiteFooterText"
-            label="页脚文本（支持HTML）"
-            extra="支持HTML标签，用于在客户端页面底部显示信息"
+            label="页脚文本（富文本编辑器）"
+            extra="支持富文本编辑，包括字体、颜色、图片等，用于在客户端页面底部显示信息"
           >
             <div>
-              <HtmlToolbar textAreaId="textarea-customerSiteFooterText" />
+              <EnhancedHtmlToolbar textAreaId="textarea-customerSiteFooterText" />
               <TextArea
                 id="textarea-customerSiteFooterText"
-                rows={4}
-                placeholder="输入页脚文本，支持HTML标签"
+                rows={6}
+                placeholder="输入页脚文本，使用上方工具栏进行富文本编辑"
                 style={{ borderRadius: '0 0 6px 6px' }}
               />
             </div>
