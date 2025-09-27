@@ -39,7 +39,7 @@ import {
   AlignRightOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
-import WysiwygEditor from '../components/WysiwygEditor';
+import WysiwygEditor from '../../components/WysiwygEditor';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
