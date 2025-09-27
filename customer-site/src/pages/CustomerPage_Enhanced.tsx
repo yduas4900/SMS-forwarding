@@ -51,6 +51,19 @@ interface VerificationCode {
   progressive_index?: number;
   full_content?: string;
   sender?: string;
+  smart_recognition?: {
+    region: string;
+    best_code: {
+      code: string;
+      confidence: number;
+      pattern_type: string;
+    };
+    all_candidates: Array<{
+      code: string;
+      confidence: number;
+      pattern_type: string;
+    }>;
+  };
 }
 
 interface LinkInfo {
@@ -58,23 +71,11 @@ interface LinkInfo {
   link_id: string;
   access_count: number;
   max_access_count: number;
-  verification_count?: number;
-  max_verification_count?: number;
-  created_at: string;
-  verification_wait_time?: number;
-  account_id?: number;
+  max_verification_count: number;
+  verification_count?: number;  // 🔥 新增：服务器端的真实验证码获取次数
   access_session_interval?: number;
-  last_access_time?: string;
-}
-
-interface CustomerSiteSettings {
-  customerSiteTitle: string;
-  customerSiteDescription: string;
-  customerSiteWelcomeText: string;
-  customerSiteFooterText: string;
-  customerSiteBackgroundColor: string;
-  customerSiteCustomCSS: string;
-  enableCustomerSiteCustomization: boolean;
+  verification_wait_time?: number;
+  created_at: string;
 }
 
 interface SmsSlot {
@@ -88,81 +89,69 @@ interface SmsSlot {
 const CustomerPage: React.FC = () => {
   const { linkId } = useParams<{ linkId: string }>();
   const [searchParams] = useSearchParams();
-  const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
+  // 🔥 支持页面刷新时保持已获取的短信
+  const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(() => {
+    // 页面加载时从sessionStorage恢复已获取的短信
+    try {
+      const savedSms = sessionStorage.getItem('savedVerificationCodes');
+      if (savedSms) {
+        const parsedSms = JSON.parse(savedSms);
+        console.log('🔄 从sessionStorage恢复已获取的短信:', parsedSms);
+        return {
+          id: 0, // 临时ID，会在fetchAccountInfo时更新
+          account_name: '',
+          username: '',
+          password: '',
+          service_type: '',
+          verification_codes: parsedSms
+        };
+      }
+    } catch (error) {
+      console.error('❌ 恢复已获取短信失败:', error);
+    }
+    return null;
+  });
   const [linkInfo, setLinkInfo] = useState<LinkInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [accessDenied, setAccessDenied] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
-  const [customerSettings, setCustomerSettings] = useState<CustomerSiteSettings | null>(null);
   
   // 🔥 新增：渐进式获取短信的状态 - 每条短信独立倒计时
+  // 🔥 支持页面刷新时保持状态
   const [progressiveRetrievalState, setProgressiveRetrievalState] = useState<{
     isActive: boolean;
     totalCount: number;
     smsSlots: SmsSlot[];
     retrievedSmsIds: Set<number>;
-  }>({
-    isActive: false,
-    totalCount: 0,
-    smsSlots: [],
-    retrievedSmsIds: new Set()
+  }>(() => {
+    // 页面加载时从sessionStorage恢复状态
+    try {
+      const savedState = sessionStorage.getItem('progressiveRetrievalState');
+      if (savedState) {
+        const parsed = JSON.parse(savedState);
+        console.log('🔄 从sessionStorage恢复渐进式获取状态:', parsed);
+        return {
+          ...parsed,
+          retrievedSmsIds: new Set(parsed.retrievedSmsIds || [])
+        };
+      }
+    } catch (error) {
+      console.error('❌ 恢复渐进式获取状态失败:', error);
+    }
+    
+    return {
+      isActive: false,
+      totalCount: 0,
+      smsSlots: [],
+      retrievedSmsIds: new Set()
+    };
   });
 
-  // 🔥 新增：访问会话间隔倒计时状态
-  const [accessSessionCountdown, setAccessSessionCountdown] = useState<number>(0);
-
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const accessCountdownRef = useRef<NodeJS.Timeout | null>(null);
 
   // 获取链接ID（从URL参数或查询参数）
   const currentLinkId = linkId || searchParams.get('link_id');
-
-  // 获取客户端设置
-  const fetchCustomerSettings = async () => {
-    try {
-      console.log('🔧 开始获取客户端设置...');
-      console.log('🔗 API URL:', `${API_BASE_URL}/api/settings/customer-site/public`);
-      
-      // 使用公开API端点，无需认证
-      const response = await axios.get(`${API_BASE_URL}/api/settings/customer-site/public`);
-      
-      console.log('📥 客户端设置API响应:', response.data);
-      
-      if (response.data.success) {
-        console.log('✅ 客户端设置获取成功:', response.data.data);
-        setCustomerSettings(response.data.data);
-        
-        // 动态设置页面标题
-        if (response.data.data.customerSiteTitle) {
-          document.title = response.data.data.customerSiteTitle;
-          console.log('📄 页面标题已更新为:', response.data.data.customerSiteTitle);
-        }
-        
-        // 检查欢迎文本
-        if (response.data.data.customerSiteWelcomeText) {
-          console.log('🎉 欢迎文本内容:', response.data.data.customerSiteWelcomeText);
-        }
-      } else {
-        console.warn('⚠️ 客户端设置API返回失败:', response.data);
-        throw new Error('API返回失败');
-      }
-    } catch (error) {
-      console.error('❌ 获取客户端设置失败，使用默认设置:', error);
-      // 使用默认设置
-      const defaultSettings = {
-        customerSiteTitle: '验证码获取服务',
-        customerSiteDescription: '安全便捷的验证码获取服务',
-        customerSiteWelcomeText: '<h2>欢迎使用验证码获取服务</h2><p>请按照以下步骤获取您的验证码：</p><ol><li>复制用户名和密码</li><li>点击获取验证码按钮</li><li>等待验证码到达</li></ol>',
-        customerSiteFooterText: '<p>如有问题，请联系客服。</p>',
-        customerSiteBackgroundColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        customerSiteCustomCSS: '',
-        enableCustomerSiteCustomization: true
-      };
-      console.log('🔄 使用默认设置:', defaultSettings);
-      setCustomerSettings(defaultSettings);
-    }
-  };
 
   // 获取账号信息
   const fetchAccountInfo = async () => {
@@ -182,6 +171,30 @@ const CustomerPage: React.FC = () => {
         const accountData = response.data.data.account_info;
         const linkData = response.data.data.link_info;
         
+        console.log('🔍 API返回的完整响应:', response.data);
+        console.log('🔍 API返回的账号数据:', accountData);
+        console.log('🔍 API返回的链接数据:', linkData);
+        console.log('🔍 账号ID:', accountData.id);
+        
+        if (!accountData.id) {
+          console.error('❌ 账号ID为空或undefined:', accountData);
+          setError('账号数据异常：缺少账号ID');
+          return;
+        }
+        
+        // 🔥 合并已保存的短信和新的账号信息
+        const savedSms = sessionStorage.getItem('savedVerificationCodes');
+        let existingCodes: VerificationCode[] = [];
+        
+        if (savedSms) {
+          try {
+            existingCodes = JSON.parse(savedSms);
+            console.log('🔄 合并已保存的短信:', existingCodes.length, '条');
+          } catch (error) {
+            console.error('❌ 解析已保存短信失败:', error);
+          }
+        }
+        
         setAccountInfo({
           id: accountData.id,
           account_name: accountData.account_name,
@@ -189,75 +202,13 @@ const CustomerPage: React.FC = () => {
           password: accountData.password,
           service_type: accountData.type || '未知服务',
           avatar_url: accountData.image_url,
-          verification_codes: accountData.verification_codes || []
+          verification_codes: existingCodes.length > 0 ? existingCodes : (accountData.verification_codes || [])
         });
         
         setLinkInfo(linkData);
-        setLastRefresh(new Date());
-
-        // 🔥 关键修复：页面加载时立即检查访问次数是否已达上限
-        console.log('🔍 页面加载时检查访问次数限制:', {
-          current: linkData.access_count,
-          max: linkData.max_access_count,
-          isLimitReached: linkData.access_count >= linkData.max_access_count
-        });
-
-        // 🔥 新增：页面加载时也检查验证码次数限制
-        console.log('🔍 页面加载时检查验证码次数限制:', {
-          verificationCurrent: linkData.verification_count,
-          verificationMax: linkData.max_verification_count,
-          isVerificationLimitReached: linkData.verification_count !== undefined && linkData.max_verification_count !== undefined && linkData.verification_count >= linkData.max_verification_count
-        });
-
-        if (linkData.access_count >= linkData.max_access_count) {
-          console.log('🚫 页面加载时发现访问次数已达上限，立即跳转到访问受限页面');
-          setAccessDenied(true);
-          setError('此链接的访问次数已达上限，无法继续访问，请联系管理员。');
-          setLoading(false);
-          return; // 停止后续处理
-        }
-
-        // 如果没有达到上限，继续正常流程
         setAccessDenied(false);
         setError(null);
-
-        // 🔥 新增：计算访问会话间隔倒计时
-        if (linkData.last_access_time && linkData.access_session_interval) {
-          const lastAccessTime = new Date(linkData.last_access_time);
-          const sessionIntervalMs = linkData.access_session_interval * 60 * 1000; // 分钟转毫秒
-          const elapsedTime = Date.now() - lastAccessTime.getTime();
-          const remainingTime = Math.max(0, sessionIntervalMs - elapsedTime);
-          const remainingSeconds = Math.ceil(remainingTime / 1000);
-          
-          console.log('⏰ 访问会话间隔倒计时计算:', {
-            lastAccessTime: linkData.last_access_time,
-            sessionInterval: linkData.access_session_interval,
-            elapsedMs: elapsedTime,
-            remainingMs: remainingTime,
-            remainingSeconds
-          });
-
-          setAccessSessionCountdown(remainingSeconds);
-        }
-
-        // 🔥 关键修复：只在页面刷新时保留短信，新打开页面时不保留
-        // 检测是否为页面刷新：通过检查performance.navigation.type
-        const isPageRefresh = performance.navigation && performance.navigation.type === 1;
-        const isBackForward = performance.navigation && performance.navigation.type === 2;
-        
-        console.log('🔍 页面加载类型检测:', {
-          navigationType: performance.navigation?.type,
-          isPageRefresh,
-          isBackForward,
-          userAgent: navigator.userAgent
-        });
-
-        if (isPageRefresh || isBackForward) {
-          console.log('🔄 检测到页面刷新或前进后退，保留已有短信');
-          await fetchExistingSms();
-        } else {
-          console.log('🆕 检测到新打开页面，不保留短信，从空白状态开始');
-        }
+        setLastRefresh(new Date());
       } else {
         if (response.data.error === 'access_limit_exceeded') {
           setAccessDenied(true);
@@ -281,78 +232,25 @@ const CustomerPage: React.FC = () => {
     }
   };
 
-  // 🔥 恢复功能：获取已有的短信（页面刷新时保留验证码）
-  const fetchExistingSms = async () => {
-    if (!currentLinkId) return;
-
-    try {
-      console.log('🔄 获取已有短信，保留页面刷新前的验证码...');
-      console.log('🔗 API URL:', `${API_BASE_URL}/api/get_existing_sms?link_id=${currentLinkId}`);
-      
-      const response = await fetch(`${API_BASE_URL}/api/get_existing_sms?link_id=${currentLinkId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      console.log('📡 API响应状态:', response.status);
-
-      if (!response.ok) {
-        console.warn('获取已有短信失败，继续正常流程，状态码:', response.status);
-        return;
-      }
-
-      const data = await response.json();
-      console.log('📥 已有短信API响应:', data);
-
-      if (data.success && data.data?.all_matched_sms?.length > 0) {
-        // 将已有短信转换为验证码格式
-        const existingCodes: VerificationCode[] = data.data.all_matched_sms.map((sms: any, index: number) => {
-          const extractedCode = extractVerificationCode(sms.content);
-          return {
-            id: sms.id,
-            code: extractedCode || sms.content,
-            received_at: sms.sms_timestamp || new Date().toISOString(),
-            is_used: false,
-            full_content: sms.content,
-            sender: sms.sender,
-            progressive_index: index + 1
-          };
-        });
-
-        console.log('🔄 转换后的验证码数据:', existingCodes);
-
-        // 更新账号信息，保留已有的验证码
-        setAccountInfo(prev => {
-          const updated = prev ? {
-            ...prev,
-            verification_codes: existingCodes
-          } : null;
-          console.log('📱 更新后的accountInfo:', updated);
-          return updated;
-        });
-
-        console.log(`✅ 页面刷新保留了 ${existingCodes.length} 条已有验证码`);
-        message.success(`页面刷新保留了 ${existingCodes.length} 条已有验证码`);
-      } else {
-        console.log('📭 没有已有短信需要保留');
-      }
-    } catch (error) {
-      console.error('❌ 获取已有短信失败:', error);
-      // 不影响主流程，继续正常运行
-    }
-  };
-
   // 🔥 开始渐进式获取短信 - 为每条短信创建独立倒计时
   const startProgressiveRetrieval = useCallback(async () => {
-    if (!linkInfo || progressiveRetrievalState.isActive) return;
+    if (!accountInfo || !linkInfo || progressiveRetrievalState.isActive) return;
 
     console.log('🚀 开始渐进式获取短信流程');
     
     try {
+      // 🔥 修复：使用accountInfo.id而不是linkInfo.account_id
+      const accountId = accountInfo.id;
+      console.log('🔍 使用账号ID:', accountId);
+      
+      if (!accountId) {
+        console.error('❌ 账号ID无效:', accountId);
+        setError('账号ID无效，无法获取短信规则');
+        return;
+      }
+      
       // 获取短信规则配置
-      const rulesResponse = await fetch(`${API_BASE_URL}/api/sms_rules?account_id=${linkInfo.account_id}`, {
+      const rulesResponse = await fetch(`${API_BASE_URL}/api/sms_rules?account_id=${accountId}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -371,14 +269,24 @@ const CustomerPage: React.FC = () => {
 
       const rule = rulesData.data[0];
       const displayCount = rule.display_count || 5;
-      const waitTime = linkInfo.verification_wait_time || 10;
+      
+      // 🔥 修复：完全使用用户设置的验证码等待时间，不使用任何硬编码默认值
+      const waitTime = linkInfo.verification_wait_time;
+      
+      if (!waitTime) {
+        console.error('❌ 验证码等待时间未设置:', linkInfo);
+        setError('验证码等待时间未配置，请联系管理员设置');
+        return;
+      }
       
       console.log('📊 从数据库获取真实显示条数:', displayCount, '(规则:', rule.rule_name, ')');
+      console.log('⏰ 使用用户设置的验证码等待时间:', waitTime, '秒');
 
-      // 🔥 为每条短信创建独立的倒计时槽位
+      // 🔥 为每条短信创建独立的倒计时槽位 - 完全使用用户设置的时间间隔
+      // 第1条短信：waitTime秒，第2条短信：waitTime*2秒，第3条短信：waitTime*3秒...
       const smsSlots: SmsSlot[] = Array.from({ length: displayCount }, (_, index) => ({
         index: index + 1,
-        countdown: (index + 1) * waitTime, // 递增倒计时：第1条10秒，第2条20秒，第3条30秒...
+        countdown: (index + 1) * waitTime, // 递增倒计时：使用用户设置的时间间隔
         status: 'waiting',
         sms: undefined,
         message: `正在等待第 ${index + 1} 条短信`
@@ -391,6 +299,10 @@ const CustomerPage: React.FC = () => {
         smsSlots: smsSlots,
         retrievedSmsIds: new Set()
       });
+
+      // 🔥 清空sessionStorage中的旧状态，开始新的获取流程
+      sessionStorage.removeItem('progressiveRetrievalState');
+      sessionStorage.removeItem('savedVerificationCodes');
 
       // 清空现有验证码
       setAccountInfo(prev => prev ? {
@@ -405,16 +317,13 @@ const CustomerPage: React.FC = () => {
       console.error('❌ 启动渐进式获取失败:', error);
       setError('启动获取流程失败');
     }
-  }, [linkInfo, progressiveRetrievalState.isActive]);
+  }, [accountInfo, linkInfo, progressiveRetrievalState.isActive]);
 
-  // 🔥 获取指定序号的短信（优化版本，增加重试机制）
-  const retrieveSpecificSms = useCallback(async (smsIndex: number, retryCount: number = 0) => {
+  // 🔥 获取指定序号的短信
+  const retrieveSpecificSms = useCallback(async (smsIndex: number) => {
     if (!currentLinkId) return;
 
-    const maxRetries = 3; // 最大重试次数
-    const retryDelay = 2000; // 重试延迟2秒
-
-    console.log(`🔍 正在获取第 ${smsIndex} 条短信... (尝试 ${retryCount + 1}/${maxRetries + 1})`);
+    console.log(`🔍 正在获取第 ${smsIndex} 条短信...`);
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/get_verification_code?link_id=${currentLinkId}`, {
@@ -424,40 +333,6 @@ const CustomerPage: React.FC = () => {
         },
       });
 
-      // 🔥 优化：处理429错误（频率限制）
-      if (response.status === 429) {
-        console.warn(`⚠️ 第 ${smsIndex} 条短信获取遇到频率限制 (HTTP 429)`);
-        
-        if (retryCount < maxRetries) {
-          console.log(`🔄 将在 ${retryDelay/1000} 秒后重试第 ${smsIndex} 条短信...`);
-          
-          // 更新槽位状态为等待重试
-          setProgressiveRetrievalState(prev => ({
-            ...prev,
-            smsSlots: prev.smsSlots.map(slot => 
-              slot.index === smsIndex 
-                ? { 
-                    ...slot, 
-                    status: 'waiting',
-                    countdown: Math.ceil(retryDelay / 1000),
-                    message: `第 ${smsIndex} 条短信重试中... (${retryCount + 1}/${maxRetries + 1})`
-                  }
-                : slot
-            )
-          }));
-
-          // 延迟后重试
-          setTimeout(() => {
-            retrieveSpecificSms(smsIndex, retryCount + 1);
-          }, retryDelay);
-          
-          return;
-        } else {
-          console.error(`❌ 第 ${smsIndex} 条短信重试次数已达上限`);
-          throw new Error(`频率限制，重试失败`);
-        }
-      }
-
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -465,103 +340,99 @@ const CustomerPage: React.FC = () => {
       const data = await response.json();
       console.log(`✅ 第 ${smsIndex} 条短信API响应:`, data);
 
-      if (data.success) {
-        // 🔥 关键修复：无论是否有短信都要更新统计数据
-        if (data.data?.verification_count !== undefined && data.data?.max_verification_count !== undefined) {
-          console.log(`📊 API返回统计数据: ${data.data.verification_count}/${data.data.max_verification_count}`);
-          
+      // 🔥 实时更新验证码获取次数 - 修复数据结构处理
+      console.log('🔍 检查API返回的完整数据结构:', JSON.stringify(data, null, 2));
+      
+      if (data.success && data.data) {
+        // 检查是否有verification_count字段
+        if (data.data.verification_count !== undefined) {
+          console.log(`📊 从API获取到验证码次数: ${data.data.verification_count}`);
           setLinkInfo(prev => {
-            const updated = prev ? {
-              ...prev,
-              verification_count: data.data.verification_count,
-              max_verification_count: data.data.max_verification_count
-            } : null;
-            console.log(`📊 更新后的linkInfo:`, updated);
-            return updated;
+            if (prev) {
+              const updated = {
+                ...prev,
+                verification_count: data.data.verification_count
+              };
+              console.log('📊 更新前的linkInfo:', prev);
+              console.log('📊 更新后的linkInfo:', updated);
+              return updated;
+            }
+            return null;
           });
-          
-          // 🔥 友好提示：检查是否达到阈值
-          if (data.data.verification_count >= data.data.max_verification_count) {
-            message.warning({
-              content: '验证码获取次数已达上限！如需继续使用，请联系管理员。',
-              duration: 8,
-              style: {
-                marginTop: '20vh',
-              },
-            });
-          } else if (data.data.verification_count >= data.data.max_verification_count * 0.8) {
-            // 达到80%时提醒
-            const remaining = data.data.max_verification_count - data.data.verification_count;
-            message.info({
-              content: `提醒：验证码获取次数即将达到上限，还剩 ${remaining} 次。`,
-              duration: 5,
-            });
-          }
-        }
-
-        if (data.data?.all_matched_sms?.length > 0) {
-          // 过滤掉已经获取过的短信，获取最新的
-          const newSms = data.data.all_matched_sms.filter((sms: any) => 
-            !progressiveRetrievalState.retrievedSmsIds.has(sms.id)
-          );
-
-          if (newSms.length > 0) {
-            const latestSms = newSms[0]; // 获取最新的一条
-            
-            // 提取验证码
-            const extractedCode = extractVerificationCode(latestSms.content);
-            const newCode: VerificationCode = {
-              id: latestSms.id,
-              code: extractedCode || latestSms.content,
-              received_at: latestSms.sms_timestamp || new Date().toISOString(),
-              is_used: false,
-              full_content: latestSms.content,
-              sender: latestSms.sender,
-              progressive_index: smsIndex
-            };
-            
-            // 更新对应槽位的状态
-            setProgressiveRetrievalState(prev => ({
-              ...prev,
-              smsSlots: prev.smsSlots.map(slot => 
-                slot.index === smsIndex 
-                  ? { 
-                      ...slot, 
-                      status: 'completed', 
-                      sms: newCode,
-                      message: `第 ${smsIndex} 条短信已获取`
-                    }
-                  : slot
-              ),
-              retrievedSmsIds: new Set([...prev.retrievedSmsIds, latestSms.id])
-            }));
-
-            // 添加到短信列表
-            setAccountInfo(prev => prev ? {
-              ...prev,
-              verification_codes: [...(prev.verification_codes || []), newCode]
-            } : null);
-
-            console.log(`📱 第 ${smsIndex} 条短信获取成功:`, newCode.code);
-            message.success(`第 ${smsIndex} 条短信获取成功: ${newCode.code}`);
-          } else {
-            // 没有新短信，标记为完成但无内容
-            setProgressiveRetrievalState(prev => ({
-              ...prev,
-              smsSlots: prev.smsSlots.map(slot => 
-                slot.index === smsIndex 
-                  ? { 
-                      ...slot, 
-                      status: 'completed',
-                      message: `第 ${smsIndex} 条短信：无新内容`
-                    }
-                  : slot
-              )
-            }));
-            console.log(`⚠️ 第 ${smsIndex} 条短信: 没有新的短信`);
-          }
         } else {
-          // 没有匹配的短信，标记为完成
+          console.warn('⚠️ API响应中没有verification_count字段');
+        }
+        
+        // 同时检查max_verification_count
+        if (data.data.max_verification_count !== undefined) {
+          setLinkInfo(prev => prev ? {
+            ...prev,
+            max_verification_count: data.data.max_verification_count
+          } : null);
+        }
+      }
+
+      if (data.success && data.data?.all_matched_sms?.length > 0) {
+        // 过滤掉已经获取过的短信，获取最新的
+        const newSms = data.data.all_matched_sms.filter((sms: any) => 
+          !progressiveRetrievalState.retrievedSmsIds.has(sms.id)
+        );
+
+        if (newSms.length > 0) {
+          const latestSms = newSms[0]; // 获取最新的一条
+          
+          // 🔥 使用智能识别结果
+          let extractedCode = latestSms.content;
+          let smartRecognition = null;
+          
+          // 检查是否有智能识别结果
+          if (data.data.smart_recognition && data.data.smart_recognition.best_code) {
+            extractedCode = data.data.smart_recognition.best_code.code;
+            smartRecognition = data.data.smart_recognition;
+            console.log('🧠 使用智能识别的验证码:', extractedCode, '置信度:', data.data.smart_recognition.best_code.confidence);
+          } else {
+            // 回退到本地提取
+            extractedCode = extractVerificationCode(latestSms.content) || latestSms.content;
+            console.log('🔧 使用本地提取的验证码:', extractedCode);
+          }
+          
+          const newCode: VerificationCode = {
+            id: latestSms.id,
+            code: extractedCode,
+            received_at: latestSms.sms_timestamp || new Date().toISOString(),
+            is_used: false,
+            full_content: latestSms.content,
+            sender: latestSms.sender,
+            progressive_index: smsIndex,
+            smart_recognition: smartRecognition
+          };
+          
+          // 更新对应槽位的状态
+          setProgressiveRetrievalState(prev => ({
+            ...prev,
+            smsSlots: prev.smsSlots.map(slot => 
+              slot.index === smsIndex 
+                ? { 
+                    ...slot, 
+                    status: 'completed', 
+                    sms: newCode,
+                    message: `第 ${smsIndex} 条短信已获取`
+                  }
+                : slot
+            ),
+            retrievedSmsIds: new Set([...prev.retrievedSmsIds, latestSms.id])
+          }));
+
+          // 添加到短信列表
+          setAccountInfo(prev => prev ? {
+            ...prev,
+            verification_codes: [...(prev.verification_codes || []), newCode]
+          } : null);
+
+          console.log(`📱 第 ${smsIndex} 条短信获取成功:`, newCode.code);
+          message.success(`第 ${smsIndex} 条短信获取成功: ${newCode.code}`);
+        } else {
+          // 没有新短信，标记为完成但无内容
           setProgressiveRetrievalState(prev => ({
             ...prev,
             smsSlots: prev.smsSlots.map(slot => 
@@ -569,12 +440,12 @@ const CustomerPage: React.FC = () => {
                 ? { 
                     ...slot, 
                     status: 'completed',
-                    message: `第 ${smsIndex} 条短信：无匹配短信`
+                    message: `第 ${smsIndex} 条短信：无新内容`
                   }
                 : slot
             )
           }));
-          console.log(`⚠️ 第 ${smsIndex} 条短信: 无匹配短信`);
+          console.log(`⚠️ 第 ${smsIndex} 条短信: 没有新的短信`);
         }
       } else {
         // API失败，标记为完成
@@ -594,35 +465,6 @@ const CustomerPage: React.FC = () => {
       }
 
     } catch (error) {
-      console.error(`❌ 第 ${smsIndex} 条短信获取失败:`, error);
-      
-      // 🔥 优化：对于网络错误或其他错误，也尝试重试
-      if (retryCount < maxRetries && error.message.includes('HTTP')) {
-        console.log(`🔄 网络错误，将在 ${retryDelay/1000} 秒后重试第 ${smsIndex} 条短信...`);
-        
-        // 更新槽位状态为等待重试
-        setProgressiveRetrievalState(prev => ({
-          ...prev,
-          smsSlots: prev.smsSlots.map(slot => 
-            slot.index === smsIndex 
-              ? { 
-                  ...slot, 
-                  status: 'waiting',
-                  countdown: Math.ceil(retryDelay / 1000),
-                  message: `第 ${smsIndex} 条短信重试中... (${retryCount + 1}/${maxRetries + 1})`
-                }
-              : slot
-          )
-        }));
-
-        // 延迟后重试
-        setTimeout(() => {
-          retrieveSpecificSms(smsIndex, retryCount + 1);
-        }, retryDelay);
-        
-        return;
-      }
-      
       // 错误处理，标记为完成
       setProgressiveRetrievalState(prev => ({
         ...prev,
@@ -631,11 +473,12 @@ const CustomerPage: React.FC = () => {
             ? { 
                 ...slot, 
                 status: 'completed',
-                message: retryCount > 0 ? `第 ${smsIndex} 条短信重试失败` : `第 ${smsIndex} 条短信获取失败`
+                message: `第 ${smsIndex} 条短信获取失败`
               }
             : slot
         )
       }));
+      console.error(`❌ 第 ${smsIndex} 条短信获取失败:`, error);
     }
   }, [currentLinkId, progressiveRetrievalState.retrievedSmsIds]);
 
@@ -684,24 +527,94 @@ const CustomerPage: React.FC = () => {
     return () => clearInterval(timer);
   }, [progressiveRetrievalState.isActive, retrieveSpecificSms]);
 
-  // 提取验证码的辅助函数
+  // 🔥 智能验证码识别函数 - 支持国内外各种格式
   const extractVerificationCode = (content: string): string | null => {
+    // 🌍 国内外验证码识别模式
     const patterns = [
-      /验证码[：:\s]*(\d{4,8})/,
-      /verification code[：:\s]*(\d{4,8})/i,
-      /code[：:\s]*(\d{4,8})/i,
-      /(\d{4,8})[^0-9]*验证码/,
-      /【.*】.*?(\d{4,8})/,
-      /(?:验证码|code|密码)[^0-9]*(\d{4,8})/i
+      // 🇨🇳 中文验证码模式
+      /验证码[：:\s]*([A-Za-z0-9]{3,8})/i,
+      /验证码为[：:\s]*([A-Za-z0-9]{3,8})/i,
+      /验证码是[：:\s]*([A-Za-z0-9]{3,8})/i,
+      /动态码[：:\s]*([A-Za-z0-9]{3,8})/i,
+      /校验码[：:\s]*([A-Za-z0-9]{3,8})/i,
+      /安全码[：:\s]*([A-Za-z0-9]{3,8})/i,
+      /([A-Za-z0-9]{3,8})[^A-Za-z0-9]*验证码/i,
+      /([A-Za-z0-9]{3,8})[^A-Za-z0-9]*动态码/i,
+      
+      // 🇺🇸 英文验证码模式
+      /verification code[：:\s]*([A-Za-z0-9]{3,8})/i,
+      /verify code[：:\s]*([A-Za-z0-9]{3,8})/i,
+      /auth code[：:\s]*([A-Za-z0-9]{3,8})/i,
+      /security code[：:\s]*([A-Za-z0-9]{3,8})/i,
+      /access code[：:\s]*([A-Za-z0-9]{3,8})/i,
+      /login code[：:\s]*([A-Za-z0-9]{3,8})/i,
+      /otp[：:\s]*([A-Za-z0-9]{3,8})/i,
+      /pin[：:\s]*([A-Za-z0-9]{3,8})/i,
+      /code[：:\s]*([A-Za-z0-9]{3,8})/i,
+      
+      // 🌐 通用模式 - 括号、引号包围
+      /【([A-Za-z0-9]{3,8})】/i,
+      /\[([A-Za-z0-9]{3,8})\]/i,
+      /\(([A-Za-z0-9]{3,8})\)/i,
+      /"([A-Za-z0-9]{3,8})"/i,
+      /'([A-Za-z0-9]{3,8})'/i,
+      /`([A-Za-z0-9]{3,8})`/i,
+      
+      // 🔢 纯数字模式（国内常见）
+      /(\d{4,8})(?=\D|$)/,
+      
+      // 🔤 字母数字组合模式（国外常见）
+      /\b([A-Z0-9]{4,8})\b/,
+      /\b([a-z0-9]{4,8})\b/i,
+      /\b([A-Za-z]{4,6})\b/,
+      
+      // 🏢 特定服务商模式
+      /your code is[：:\s]*([A-Za-z0-9]{3,8})/i,
+      /use code[：:\s]*([A-Za-z0-9]{3,8})/i,
+      /enter[：:\s]*([A-Za-z0-9]{3,8})/i,
+      /confirm with[：:\s]*([A-Za-z0-9]{3,8})/i,
+      
+      // 🌏 多语言模式
+      /código[：:\s]*([A-Za-z0-9]{3,8})/i, // 西班牙语
+      /code de vérification[：:\s]*([A-Za-z0-9]{3,8})/i, // 法语
+      /bestätigungscode[：:\s]*([A-Za-z0-9]{3,8})/i, // 德语
+      /認証コード[：:\s]*([A-Za-z0-9]{3,8})/i, // 日语
+      /인증번호[：:\s]*([A-Za-z0-9]{3,8})/i, // 韩语
     ];
     
+    // 🎯 按优先级尝试匹配
     for (const pattern of patterns) {
       const match = content.match(pattern);
-      if (match) {
-        return match[1];
+      if (match && match[1]) {
+        const code = match[1].trim();
+        // 🔍 验证提取的代码是否合理
+        if (code.length >= 3 && code.length <= 8) {
+          console.log(`🎯 智能识别验证码成功: "${code}" (模式: ${pattern.source})`);
+          return code;
+        }
       }
     }
+    
+    console.log(`❌ 未能识别验证码，短信内容: "${content}"`);
     return null;
+  };
+
+  // 🔥 新增：智能验证码检测函数
+  const isValidVerificationCode = (code: string): boolean => {
+    if (!code || code.length < 3 || code.length > 8) return false;
+    
+    // 🎯 验证码格式检测规则
+    const validPatterns = [
+      /^\d{4,8}$/,           // 纯数字：1234, 123456
+      /^[A-Z0-9]{4,8}$/,     // 大写字母+数字：A1B2, XYZ123
+      /^[a-z0-9]{4,8}$/,     // 小写字母+数字：a1b2, xyz123
+      /^[A-Za-z0-9]{4,8}$/,  // 混合字母数字：Ab12, XyZ123
+      /^[A-Z]{4,6}$/,        // 纯大写字母：ABCD, XYZABC
+      /^[a-z]{4,6}$/,        // 纯小写字母：abcd, xyzabc
+      /^[A-Za-z]{4,6}$/,     // 混合字母：AbCd, XyZaBc
+    ];
+    
+    return validPatterns.some(pattern => pattern.test(code));
   };
 
   // 复制到剪贴板
@@ -743,139 +656,64 @@ const CustomerPage: React.FC = () => {
     return { text: `${diffHours}小时前`, color: '#ff4d4f' };
   };
 
-  // 🔥 新增：访问会话间隔倒计时效果
+  // 🔥 保存状态到sessionStorage
   useEffect(() => {
-    if (accessSessionCountdown <= 0) return;
-
-    accessCountdownRef.current = setInterval(() => {
-      setAccessSessionCountdown(prev => {
-        const newCountdown = prev - 1;
-        
-        if (newCountdown <= 0) {
-          console.log('⏰ 访问会话间隔倒计时结束，访问次数即将增加');
-          
-          // 🔥 关键修复：倒计时结束时主动调用API更新访问次数
-          const updateAccessCount = async () => {
-            try {
-              console.log('🔄 倒计时结束，调用API更新访问次数...');
-              const response = await axios.get(`${API_BASE_URL}/api/get_account_info`, {
-                params: { link_id: currentLinkId }
-              });
-
-              if (response.data.success) {
-                const updatedLinkData = response.data.data.link_info;
-                console.log('📊 API返回更新后的访问次数:', updatedLinkData.access_count);
-                
-                // 实时更新linkInfo状态
-                setLinkInfo(prev => prev ? {
-                  ...prev,
-                  access_count: updatedLinkData.access_count,
-                  last_access_time: updatedLinkData.last_access_time
-                } : null);
-
-                // 🔥 关键修复：检查访问次数是否达到上限，如果达到则跳转到访问受限页面
-                console.log('🔍 检查访问次数限制:', {
-                  current: updatedLinkData.access_count,
-                  max: updatedLinkData.max_access_count,
-                  isLimitReached: updatedLinkData.access_count >= updatedLinkData.max_access_count
-                });
-
-                if (updatedLinkData.access_count >= updatedLinkData.max_access_count) {
-                  console.log('🚫 访问次数已达上限，立即跳转到访问受限页面');
-                  
-                  // 立即设置访问受限状态
-                  setAccessDenied(true);
-                  setError('此链接的访问次数已达上限，无法继续访问，请联系管理员。');
-                  
-                  // 清除倒计时
-                  setAccessSessionCountdown(0);
-                  if (accessCountdownRef.current) {
-                    clearInterval(accessCountdownRef.current);
-                  }
-                  
-                  // 显示跳转提示
-                  message.warning({
-                    content: '访问次数已达上限！页面正在跳转到访问受限状态。',
-                    duration: 3,
-                    style: {
-                      marginTop: '20vh',
-                    },
-                  });
-                  
-                  // 强制重新渲染
-                  setTimeout(() => {
-                    console.log('🔄 强制重新渲染页面状态');
-                    setLoading(false); // 确保不在加载状态
-                  }, 100);
-                  
-                  return; // 停止后续处理
-                }
-
-                // 🔥 友好提示：根据新的访问次数提醒用户
-                const newPercent = Math.round((updatedLinkData.access_count / updatedLinkData.max_access_count) * 100);
-                
-                if (newPercent >= 80) {
-                  const remaining = updatedLinkData.max_access_count - updatedLinkData.access_count;
-                  message.info({
-                    content: `访问次数已增加！还剩 ${remaining} 次访问机会。`,
-                    duration: 5,
-                  });
-                } else {
-                  message.success({
-                    content: `访问次数已增加至 ${updatedLinkData.access_count}/${updatedLinkData.max_access_count}`,
-                    duration: 3,
-                  });
-                }
-
-                // 重新计算下一次倒计时
-                if (updatedLinkData.last_access_time && updatedLinkData.access_session_interval) {
-                  const newLastAccessTime = new Date(updatedLinkData.last_access_time);
-                  const sessionIntervalMs = updatedLinkData.access_session_interval * 60 * 1000;
-                  const elapsedTime = Date.now() - newLastAccessTime.getTime();
-                  const remainingTime = Math.max(0, sessionIntervalMs - elapsedTime);
-                  const remainingSeconds = Math.ceil(remainingTime / 1000);
-                  
-                  console.log('⏰ 重新计算下一次访问会话倒计时:', remainingSeconds, '秒');
-                  setAccessSessionCountdown(remainingSeconds);
-                }
-              }
-            } catch (error) {
-              console.error('❌ 更新访问次数失败:', error);
-              message.error('更新访问次数失败，请刷新页面查看最新状态');
-            }
-          };
-
-          // 异步更新访问次数
-          updateAccessCount();
-          
-          return 0;
-        }
-        
-        return newCountdown;
-      });
-    }, 1000);
-
-    return () => {
-      if (accessCountdownRef.current) {
-        clearInterval(accessCountdownRef.current);
+    if (progressiveRetrievalState.isActive || progressiveRetrievalState.smsSlots.length > 0) {
+      try {
+        const stateToSave = {
+          ...progressiveRetrievalState,
+          retrievedSmsIds: Array.from(progressiveRetrievalState.retrievedSmsIds)
+        };
+        sessionStorage.setItem('progressiveRetrievalState', JSON.stringify(stateToSave));
+        console.log('💾 保存渐进式获取状态到sessionStorage');
+      } catch (error) {
+        console.error('❌ 保存渐进式获取状态失败:', error);
       }
-    };
-  }, [accessSessionCountdown, linkInfo, currentLinkId]);
+    }
+  }, [progressiveRetrievalState]);
+
+  // 🔥 保存已获取的短信到sessionStorage
+  useEffect(() => {
+    if (accountInfo?.verification_codes && accountInfo.verification_codes.length > 0) {
+      try {
+        sessionStorage.setItem('savedVerificationCodes', JSON.stringify(accountInfo.verification_codes));
+        console.log('💾 保存已获取的短信到sessionStorage:', accountInfo.verification_codes.length, '条');
+      } catch (error) {
+        console.error('❌ 保存已获取短信失败:', error);
+      }
+    }
+  }, [accountInfo?.verification_codes]);
+
+  // 🔥 清空sessionStorage的函数（重新打开页面时调用）
+  const clearSessionStorage = useCallback(() => {
+    try {
+      sessionStorage.removeItem('progressiveRetrievalState');
+      sessionStorage.removeItem('savedVerificationCodes');
+      console.log('🗑️ 清空sessionStorage - 重新打开页面');
+    } catch (error) {
+      console.error('❌ 清空sessionStorage失败:', error);
+    }
+  }, []);
 
   // 组件挂载时获取数据
   useEffect(() => {
+    // 🔥 检查是否是重新打开页面（没有保存的状态）
+    const hasProgressiveState = sessionStorage.getItem('progressiveRetrievalState');
+    const hasSavedSms = sessionStorage.getItem('savedVerificationCodes');
+    
+    if (!hasProgressiveState && !hasSavedSms) {
+      console.log('🆕 重新打开页面 - 清空所有状态');
+      clearSessionStorage();
+    }
+    
     fetchAccountInfo();
-    fetchCustomerSettings();
     
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
-      if (accessCountdownRef.current) {
-        clearInterval(accessCountdownRef.current);
-      }
     };
-  }, [currentLinkId]);
+  }, [currentLinkId, clearSessionStorage]);
 
   // 在所有return语句中包装ConfigProvider
   if (loading) {
@@ -900,7 +738,7 @@ const CustomerPage: React.FC = () => {
               <ExclamationCircleOutlined style={{ fontSize: 48, color: '#ff4d4f', marginBottom: 16 }} />
               <Title level={4} type="danger">访问受限</Title>
               <Paragraph>
-                {accessDenied ? '此链接的访问次数已达上限，无法继续访问，请联系管理员。' : error}
+                {accessDenied ? '此链接的访问次数已达上限，无法继续访问。' : error}
               </Paragraph>
               {linkInfo && (
                 <div style={{ marginTop: 16, padding: 16, background: '#fff2f0', borderRadius: 8 }}>
@@ -935,75 +773,19 @@ const CustomerPage: React.FC = () => {
     <ConfigProvider locale={zhCN}>
       <div className="customer-container" style={{ 
         minHeight: '100vh', 
-        background: customerSettings?.customerSiteBackgroundColor || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        padding: '20px',
-        position: 'relative'
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        padding: '20px'
       }}>
-        {/* 美化背景装饰 */}
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: `
-            radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
-            radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
-            radial-gradient(circle at 40% 40%, rgba(120, 119, 198, 0.2) 0%, transparent 50%)
-          `,
-          pointerEvents: 'none',
-          zIndex: 0
-        }} />
-        
-        {/* 自定义CSS样式 */}
-        {customerSettings?.customerSiteCustomCSS && (
-          <style dangerouslySetInnerHTML={{ __html: customerSettings.customerSiteCustomCSS }} />
-        )}
-        
-        <div style={{ maxWidth: 800, margin: '0 auto', position: 'relative', zIndex: 1 }}>
-          {/* 自定义欢迎内容 */}
-          {customerSettings?.enableCustomerSiteCustomization && customerSettings?.customerSiteWelcomeText && (
-            <Card 
-              style={{ 
-                marginBottom: 24,
-                borderRadius: 16,
-                boxShadow: '0 12px 40px rgba(0,0,0,0.15)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                background: 'rgba(255,255,255,0.95)',
-                backdropFilter: 'blur(10px)'
-              }}
-            >
-              <div 
-                dangerouslySetInnerHTML={{ __html: customerSettings.customerSiteWelcomeText }}
-                style={{ 
-                  textAlign: 'center',
-                  lineHeight: '1.8',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word'
-                }}
-              />
-            </Card>
-          )}
-
+        <div style={{ maxWidth: 800, margin: '0 auto' }}>
           {/* 账号信息卡片 */}
           <Card 
             className="customer-card"
             style={{ 
               marginBottom: 24,
-              borderRadius: 16,
-              boxShadow: '0 12px 40px rgba(0,0,0,0.15)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              background: 'rgba(255,255,255,0.95)',
-              backdropFilter: 'blur(10px)',
-              overflow: 'hidden'
+              borderRadius: 12,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
             }}
           >
-            {/* 卡片顶部装饰条 */}
-            <div style={{
-              height: '4px',
-              background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
-              margin: '-24px -24px 20px -24px'
-            }} />
             <Row gutter={[24, 24]} align="middle">
               <Col xs={24} sm={8} style={{ textAlign: 'center' }}>
                 <Avatar
@@ -1082,14 +864,8 @@ const CustomerPage: React.FC = () => {
           <Card
             title={
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ 
-                  display: 'flex', 
-                  alignItems: 'center',
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  color: '#1890ff'
-                }}>
-                  <MobileOutlined style={{ marginRight: 8, fontSize: '18px' }} />
+                <span>
+                  <MobileOutlined style={{ marginRight: 8 }} />
                   验证码信息
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1105,42 +881,28 @@ const CustomerPage: React.FC = () => {
                     onClick={startProgressiveRetrieval}
                     disabled={
                       progressiveRetrievalState.isActive || 
-                      (linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && 
-                       linkInfo.verification_count >= linkInfo.max_verification_count)
+                      (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count)
                     }
                     loading={loading}
                     style={{
-                      borderRadius: '8px',
-                      background: progressiveRetrievalState.isActive ? '#faad14' : 
-                                 (linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && 
-                                  linkInfo.verification_count >= linkInfo.max_verification_count) ? '#ff4d4f' : '#1890ff',
-                      borderColor: 'transparent',
-                      boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
-                      fontWeight: '600'
+                      opacity: (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count) ? 0.5 : 1
                     }}
                   >
-                    {progressiveRetrievalState.isActive ? '获取中...' : 
-                     (linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && 
-                      linkInfo.verification_count >= linkInfo.max_verification_count) ? '已达上限' : '获取验证码'}
+                    {progressiveRetrievalState.isActive 
+                      ? '获取中...' 
+                      : (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count)
+                        ? '已达上限'
+                        : '获取验证码'
+                    }
                   </Button>
                 </div>
               </div>
             }
             style={{ 
-              borderRadius: 16,
-              boxShadow: '0 12px 40px rgba(0,0,0,0.15)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              background: 'rgba(255,255,255,0.95)',
-              backdropFilter: 'blur(10px)',
-              overflow: 'hidden'
+              borderRadius: 12,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
             }}
           >
-            {/* 卡片顶部装饰条 */}
-            <div style={{
-              height: '4px',
-              background: 'linear-gradient(90deg, #52c41a 0%, #1890ff 100%)',
-              margin: '-24px -24px 20px -24px'
-            }} />
             {/* 🔥 渐进式获取状态显示 - 显示每条短信的独立倒计时 */}
             {progressiveRetrievalState.isActive && (
               <div style={{ 
@@ -1238,406 +1000,303 @@ const CustomerPage: React.FC = () => {
               </div>
             )}
 
-            {/* 验证码列表 */}
+            {/* 短信列表 - 显示完整短信内容 */}
             {accountInfo.verification_codes && accountInfo.verification_codes.length > 0 ? (
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 {accountInfo.verification_codes
                   .sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime())
-                  .map((code, index) => {
-                    const freshness = getCodeFreshness(code.received_at);
-                    const isLimitReached = linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && linkInfo.verification_count >= linkInfo.max_verification_count;
+                  .map((sms) => {
+                    const freshness = getCodeFreshness(sms.received_at);
+                    // 显示完整短信内容，如果没有full_content则显示code
+                    const fullContent = sms.full_content || sms.code;
+                    const extractedCode = sms.code;
                     
                     return (
                       <Card
-                        key={code.id}
+                        key={sms.id}
                         size="small"
                         style={{
-                          background: code.is_used ? 'rgba(245,245,245,0.8)' : 'rgba(255,255,255,0.95)',
-                          border: `2px solid ${code.is_used ? '#d9d9d9' : '#1890ff'}`,
-                          borderRadius: 16,
-                          boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                          backdropFilter: 'blur(8px)',
-                          overflow: 'hidden',
-                          transition: 'all 0.3s ease',
-                          position: 'relative'
+                          background: sms.is_used ? '#f5f5f5' : '#fff',
+                          border: `2px solid ${sms.is_used ? '#d9d9d9' : '#1890ff'}`,
+                          borderRadius: 12,
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                         }}
                       >
-                        {/* 验证码卡片装饰条 */}
-                        <div style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          height: '3px',
-                          background: code.is_used ? 
-                            'linear-gradient(90deg, #d9d9d9 0%, #f0f0f0 100%)' : 
-                            'linear-gradient(90deg, #52c41a 0%, #1890ff 100%)'
-                        }} />
-                        
-                        {/* 🔥 修复：在第一个验证码卡片顶部显示限制提示，不影响布局 */}
-                        {index === 0 && isLimitReached && (
+                        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                          {/* 短信头部信息 */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              {sms.progressive_index && (
+                                <Tag color="blue" size="small">
+                                  第{sms.progressive_index}条
+                                </Tag>
+                              )}
+                              {sms.is_used && (
+                                <Tag color="default" size="small">已使用</Tag>
+                              )}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <ClockCircleOutlined style={{ color: freshness.color }} />
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                  {formatTime(sms.received_at)}
+                                </Text>
+                                <Tag color={freshness.color} size="small">
+                                  {freshness.text}
+                                </Tag>
+                              </div>
+                            </div>
+                            {sms.sender && (
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                来自: {sms.sender}
+                              </Text>
+                            )}
+                          </div>
+
+                          {/* 完整短信内容 */}
                           <div style={{
-                            padding: '10px 16px',
-                            marginTop: '8px',
-                            marginBottom: '16px',
-                            backgroundColor: 'rgba(255, 247, 230, 0.9)',
-                            borderRadius: '8px',
-                            border: '1px solid #ffd591',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            backdropFilter: 'blur(4px)'
+                            padding: '12px 16px',
+                            background: '#f8f9fa',
+                            borderRadius: 8,
+                            border: '1px solid #e9ecef',
+                            lineHeight: '1.6'
                           }}>
-                            <ExclamationCircleOutlined style={{ color: '#faad14', fontSize: 18 }} />
-                            <Text style={{ fontSize: 13, color: '#d46b08', fontWeight: '500' }}>
-                              验证码获取次数已达上限，无法继续获取新的验证码
+                            <Text style={{ 
+                              fontSize: 14,
+                              color: '#333',
+                              wordBreak: 'break-word',
+                              whiteSpace: 'pre-wrap'
+                            }}>
+                              {fullContent}
                             </Text>
                           </div>
-                        )}
-                        
-                        <div style={{ padding: index === 0 && isLimitReached ? '8px 16px 16px' : '16px' }}>
-                          <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                            {/* 验证码显示区域 */}
-                            <Row align="middle" justify="space-between">
-                              <Col flex="auto">
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                  <Text
-                                    strong
-                                    style={{
-                                      fontSize: 24,
-                                      fontFamily: 'SF Mono, Monaco, Consolas, monospace',
-                                      color: code.is_used ? '#999' : '#1890ff',
-                                      letterSpacing: '3px',
-                                      textShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                                    }}
-                                  >
-                                    {code.code}
-                                  </Text>
-                                  {code.is_used && (
-                                    <Tag color="default" size="small" style={{ borderRadius: '12px' }}>已使用</Tag>
-                                  )}
-                                  {code.progressive_index && (
-                                    <Tag color="blue" size="small" style={{ borderRadius: '12px' }}>
-                                      第{code.progressive_index}条
-                                    </Tag>
-                                  )}
-                                </div>
-                              </Col>
-                              <Col>
-                                <Button
-                                  type="primary"
-                                  ghost
-                                  icon={<CopyOutlined />}
-                                  size="small"
-                                  onClick={() => copyToClipboard(code.code, '验证码')}
-                                  disabled={code.is_used}
+
+                          {/* 提取的验证码（如果有） */}
+                          {extractedCode && extractedCode !== fullContent && (
+                            <div style={{
+                              padding: '8px 12px',
+                              background: '#e6f7ff',
+                              borderRadius: 6,
+                              border: '1px solid #91d5ff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between'
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Text type="secondary" style={{ fontSize: 12 }}>识别的验证码:</Text>
+                                <Text
+                                  strong
                                   style={{
-                                    borderRadius: '10px',
-                                    fontWeight: '500',
-                                    boxShadow: '0 2px 8px rgba(24, 144, 255, 0.2)'
+                                    fontSize: 16,
+                                    fontFamily: 'monospace',
+                                    color: '#1890ff',
+                                    letterSpacing: '1px'
                                   }}
                                 >
-                                  复制验证码
-                                </Button>
-                              </Col>
-                            </Row>
+                                  {extractedCode}
+                                </Text>
+                              </div>
+                            </div>
+                          )}
 
-                            {/* 🔥 完整短信内容显示区域 - 智能显示复制按钮 */}
-                            <div style={{
-                              padding: '12px',
-                              backgroundColor: 'rgba(240, 249, 255, 0.6)',
-                              borderRadius: '8px',
-                              border: '1px solid rgba(186, 230, 253, 0.8)',
-                              position: 'relative'
-                            }}>
-                              {/* 根据是否识别出验证码显示不同的复制按钮 */}
-                              <div style={{ 
-                                display: 'flex', 
-                                justifyContent: 'flex-end', 
-                                alignItems: 'flex-start',
-                                marginBottom: '8px'
-                              }}>
-                                {/* 🔥 智能按钮逻辑：识别出验证码显示两个按钮，否则只显示复制全文 */}
-                                {code.full_content && code.full_content !== code.code ? (
-                                  // 识别出了验证码，显示两个按钮
-                                  <Space size="small">
+                          {/* 🔥 智能复制按钮组 - 根据验证码识别结果显示不同按钮 */}
+                          <div style={{ 
+                            display: 'flex', 
+                            gap: 8, 
+                            justifyContent: 'flex-end',
+                            paddingTop: 8,
+                            borderTop: '1px solid #f0f0f0'
+                          }}>
+                            {/* 🎯 智能按钮逻辑：检查是否识别出有效验证码 */}
+                            {(() => {
+                              const hasValidCode = isValidVerificationCode(extractedCode);
+                              
+                              if (hasValidCode && fullContent) {
+                                // 识别出了验证码，显示两个按钮
+                                return (
+                                  <>
                                     <Button
-                                      type="text"
-                                      size="small"
+                                      type="default"
                                       icon={<CopyOutlined />}
-                                      onClick={() => copyToClipboard(code.code, '验证码')}
+                                      size="small"
+                                      onClick={() => copyToClipboard(fullContent, '短信全文')}
+                                      disabled={sms.is_used}
+                                    >
+                                      复制全文
+                                    </Button>
+                                    <Button
+                                      type="primary"
+                                      ghost
+                                      icon={<CopyOutlined />}
+                                      size="small"
+                                      onClick={() => copyToClipboard(extractedCode, '验证码')}
+                                      disabled={sms.is_used}
                                       style={{
-                                        fontSize: '11px',
-                                        height: '24px',
-                                        padding: '0 8px',
-                                        borderRadius: '6px',
-                                        color: '#1890ff',
-                                        background: 'rgba(24, 144, 255, 0.1)'
+                                        background: 'rgba(24, 144, 255, 0.1)',
+                                        borderColor: '#1890ff'
                                       }}
                                     >
                                       复制验证码
                                     </Button>
-                                    <Button
-                                      type="text"
-                                      size="small"
-                                      icon={<CopyOutlined />}
-                                      onClick={() => copyToClipboard(code.full_content || '', '短信全文')}
-                                      style={{
-                                        fontSize: '11px',
-                                        height: '24px',
-                                        padding: '0 8px',
-                                        borderRadius: '6px',
-                                        color: '#0369a1'
-                                      }}
-                                    >
-                                      复制全文
-                                    </Button>
-                                  </Space>
-                                ) : (
-                                  // 没有识别出验证码，只显示复制全文
+                                  </>
+                                );
+                              } else {
+                                // 没有识别出验证码，只显示复制全文
+                                return (
                                   <Button
-                                    type="text"
-                                    size="small"
+                                    type="default"
                                     icon={<CopyOutlined />}
-                                    onClick={() => copyToClipboard(code.full_content || code.code || '', '短信全文')}
-                                    style={{
-                                      fontSize: '11px',
-                                      height: '24px',
-                                      padding: '0 8px',
-                                      borderRadius: '6px',
-                                      color: '#0369a1'
-                                    }}
+                                    size="small"
+                                    onClick={() => copyToClipboard(fullContent, '短信全文')}
+                                    disabled={sms.is_used}
                                   >
                                     复制全文
                                   </Button>
-                                )}
-                              </div>
-                              <Text style={{ 
-                                fontSize: 13, 
-                                color: '#1e40af',
-                                lineHeight: '1.5',
-                                display: 'block',
-                                wordBreak: 'break-all',
-                                whiteSpace: 'pre-wrap'
-                              }}>
-                                {code.full_content || code.code || '短信内容获取中...'}
-                              </Text>
-                              {code.sender && (
-                                <div style={{ 
-                                  marginTop: '8px',
-                                  paddingTop: '8px',
-                                  borderTop: '1px solid rgba(186, 230, 253, 0.5)'
-                                }}>
-                                  <Text style={{ 
-                                    fontSize: 11, 
-                                    color: '#64748b',
-                                    fontWeight: '500'
-                                  }}>
-                                    发送方: {code.sender}
-                                  </Text>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* 时间信息 */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <ClockCircleOutlined style={{ color: freshness.color, fontSize: 14 }} />
-                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                {formatTime(code.received_at)}
-                              </Text>
-                              <Tag color={freshness.color} size="small" style={{ borderRadius: '10px' }}>
-                                {freshness.text}
-                              </Tag>
-                            </div>
-                          </Space>
-                        </div>
+                                );
+                              }
+                            })()}
+                          </div>
+                        </Space>
                       </Card>
                     );
                   })}
               </Space>
             ) : (
               <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                {/* 🔥 修复：验证码次数达到上限时的提示 - 在空状态中显示，避免布局变化 */}
-                {linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && 
-                 linkInfo.verification_count >= linkInfo.max_verification_count ? (
-                  <div>
-                    <ExclamationCircleOutlined style={{ fontSize: 48, color: '#faad14', marginBottom: 16 }} />
-                    <Title level={4} style={{ color: '#faad14' }}>验证码获取次数已达上限</Title>
-                    <Paragraph type="secondary">
-                      您已达到验证码获取次数的上限，无法继续获取新的验证码。如需继续使用，请联系管理员。
-                    </Paragraph>
-                  </div>
-                ) : (
-                  <div>
-                    <MobileOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
-                    <Title level={4} type="secondary">暂无验证码</Title>
-                    <Paragraph type="secondary">
-                      点击"获取验证码"按钮开始获取短信验证码
-                    </Paragraph>
-                  </div>
-                )}
+                <MobileOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
+                <Title level={4} type="secondary">暂无验证码</Title>
+                <Paragraph type="secondary">
+                  点击"获取验证码"按钮开始获取短信验证码
+                </Paragraph>
               </div>
             )}
           </Card>
 
-          {/* 访问和验证码统计 */}
+          {/* 使用统计和限制信息 */}
           {linkInfo && (
             <Card
+              title={
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ClockCircleOutlined style={{ color: '#1890ff' }} />
+                  <Text strong style={{ color: '#1890ff' }}>使用限制信息</Text>
+                </div>
+              }
               size="small"
               style={{ 
-                marginTop: 20,
-                borderRadius: 16,
+                marginTop: 16,
+                borderRadius: 12,
                 background: 'rgba(255,255,255,0.95)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                overflow: 'hidden'
+                boxShadow: '0 4px 16px rgba(0,0,0,0.1)'
               }}
             >
-              {/* 统计卡片装饰条 */}
-              <div style={{
-                height: '3px',
-                background: 'linear-gradient(90deg, #faad14 0%, #1890ff 50%, #52c41a 100%)',
-                margin: '-16px -16px 16px -16px'
-              }} />
-              
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 {/* 访问次数统计 */}
-                <Row justify="space-between" align="middle" style={{
-                  padding: '8px 12px',
-                  backgroundColor: 'rgba(24, 144, 255, 0.05)',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(24, 144, 255, 0.1)'
-                }}>
-                  <Col>
-                    <Text style={{ fontSize: 13, fontWeight: '500', color: '#1890ff' }}>
-                      访问次数: {linkInfo.access_count} / {linkInfo.max_access_count}
-                    </Text>
-                  </Col>
-                  <Col>
-                    <Progress
-                      percent={Math.round((linkInfo.access_count / linkInfo.max_access_count) * 100)}
-                      size="small"
-                      style={{ width: 120 }}
-                      strokeColor={{
-                        '0%': '#1890ff',
-                        '100%': linkInfo.access_count >= linkInfo.max_access_count ? '#ff4d4f' : '#52c41a'
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <Text strong style={{ color: '#666' }}>页面访问次数</Text>
+                    <Text 
+                      style={{ 
+                        color: linkInfo.access_count >= linkInfo.max_access_count ? '#ff4d4f' : '#52c41a',
+                        fontWeight: 'bold'
                       }}
-                      trailColor="rgba(24, 144, 255, 0.1)"
+                    >
+                      {linkInfo.access_count} / {linkInfo.max_access_count}
+                    </Text>
+                  </div>
+                  <Progress
+                    percent={Math.round((linkInfo.access_count / linkInfo.max_access_count) * 100)}
+                    size="small"
+                    strokeColor={
+                      linkInfo.access_count >= linkInfo.max_access_count ? '#ff4d4f' : '#52c41a'
+                    }
+                    trailColor="#f0f0f0"
+                  />
+                  {linkInfo.access_count >= linkInfo.max_access_count && (
+                    <Alert
+                      message="访问次数已达上限"
+                      description="此链接的访问次数已用完，无法继续访问"
+                      type="error"
+                      size="small"
+                      style={{ marginTop: 8 }}
+                      showIcon
                     />
-                  </Col>
-                </Row>
+                  )}
+                </div>
 
-                {/* 🔥 新增：访问会话间隔倒计时 */}
-                {linkInfo.access_session_interval && accessSessionCountdown > 0 && (
-                  <Row justify="space-between" align="middle" style={{ 
-                    padding: '10px 14px',
-                    backgroundColor: 'rgba(250, 173, 20, 0.1)',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(250, 173, 20, 0.2)',
-                    background: 'linear-gradient(135deg, rgba(255, 247, 230, 0.8) 0%, rgba(255, 247, 230, 0.4) 100%)'
+                {/* 验证码获取次数统计 - 🔥 修复：使用服务器端的真实次数 */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <Text strong style={{ color: '#666' }}>验证码获取次数</Text>
+                    <Text 
+                      style={{ 
+                        color: (linkInfo.verification_count || 0) >= linkInfo.max_verification_count ? '#ff4d4f' : '#52c41a',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {linkInfo.verification_count || 0} / {linkInfo.max_verification_count}
+                    </Text>
+                  </div>
+                  <Progress
+                    percent={Math.round(((linkInfo.verification_count || 0) / linkInfo.max_verification_count) * 100)}
+                    size="small"
+                    strokeColor={
+                      (linkInfo.verification_count || 0) >= linkInfo.max_verification_count ? '#ff4d4f' : '#52c41a'
+                    }
+                    trailColor="#f0f0f0"
+                  />
+                  {(linkInfo.verification_count || 0) >= linkInfo.max_verification_count && (
+                    <Alert
+                      message="🚫 验证码获取次数已达上限"
+                      description={
+                        <div>
+                          <p style={{ margin: 0, marginBottom: 8 }}>您已达到最大验证码获取次数限制。</p>
+                          <p style={{ margin: 0, color: '#1890ff', fontWeight: 'bold' }}>
+                            📞 如需继续使用，请联系管理员重置次数限制
+                          </p>
+                        </div>
+                      }
+                      type="error"
+                      size="small"
+                      style={{ marginTop: 8 }}
+                      showIcon
+                    />
+                  )}
+                </div>
+
+                {/* 验证码等待时间配置 */}
+                {linkInfo.verification_wait_time && (
+                  <div style={{ 
+                    padding: '12px 16px',
+                    background: '#f6ffed',
+                    borderRadius: 8,
+                    border: '1px solid #b7eb8f'
                   }}>
-                    <Col>
-                      <Text style={{ fontSize: 13, fontWeight: '500', color: '#fa8c16' }}>
-                        会话倒计时: {Math.floor(accessSessionCountdown / 60)}分{accessSessionCountdown % 60}秒后访问次数+1
-                      </Text>
-                    </Col>
-                    <Col>
-                      <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '10px',
-                        padding: '4px 8px',
-                        backgroundColor: 'rgba(250, 173, 20, 0.15)',
-                        borderRadius: '6px'
-                      }}>
-                        <ClockCircleOutlined style={{ color: '#fa8c16', fontSize: 16 }} />
-                        <Text 
-                          style={{ 
-                            fontSize: 16, 
-                            fontWeight: 'bold', 
-                            color: '#fa8c16',
-                            fontFamily: 'SF Mono, Monaco, Consolas, monospace',
-                            minWidth: '45px',
-                            textAlign: 'center'
-                          }}
-                        >
-                          {accessSessionCountdown}s
-                        </Text>
-                      </div>
-                    </Col>
-                  </Row>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <ClockCircleOutlined style={{ color: '#52c41a' }} />
+                      <Text strong style={{ color: '#389e0d' }}>验证码等待间隔</Text>
+                    </div>
+                    <Text style={{ color: '#666', fontSize: 12 }}>
+                      每条短信按递增间隔获取：第1条 {linkInfo.verification_wait_time}秒，第2条 {linkInfo.verification_wait_time * 2}秒，第3条 {linkInfo.verification_wait_time * 3}秒...
+                    </Text>
+                  </div>
                 )}
 
-                {/* 验证码获取统计 */}
-                <Row justify="space-between" align="middle" style={{
-                  padding: '8px 12px',
-                  backgroundColor: 'rgba(82, 196, 26, 0.05)',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(82, 196, 26, 0.1)'
-                }}>
-                  <Col>
-                    <Text style={{ fontSize: 13, fontWeight: '500', color: '#52c41a' }}>
-                      验证码次数: {linkInfo.verification_count || 0} / {linkInfo.max_verification_count || 0}
+                {/* 访问会话间隔信息 */}
+                {linkInfo.access_session_interval && (
+                  <div style={{ 
+                    padding: '12px 16px',
+                    background: '#f0f9ff',
+                    borderRadius: 8,
+                    border: '1px solid #91d5ff'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <ExclamationCircleOutlined style={{ color: '#1890ff' }} />
+                      <Text strong style={{ color: '#1890ff' }}>访问会话间隔</Text>
+                    </div>
+                    <Text style={{ color: '#666', fontSize: 12 }}>
+                      建议访问间隔：{linkInfo.access_session_interval} 分钟，避免频繁访问
                     </Text>
-                  </Col>
-                  <Col>
-                    <Progress
-                      percent={linkInfo.max_verification_count ? Math.round(((linkInfo.verification_count || 0) / linkInfo.max_verification_count) * 100) : 0}
-                      size="small"
-                      style={{ width: 120 }}
-                      strokeColor={{
-                        '0%': '#52c41a',
-                        '100%': (linkInfo.verification_count || 0) >= (linkInfo.max_verification_count || 0) ? '#ff4d4f' : '#52c41a'
-                      }}
-                      trailColor="rgba(82, 196, 26, 0.1)"
-                    />
-                  </Col>
-                </Row>
-
-                {/* 总体使用情况 */}
-                <Row justify="space-between" align="middle" style={{ 
-                  paddingTop: 12, 
-                  borderTop: '1px solid rgba(0,0,0,0.06)',
-                  marginTop: 8
-                }}>
-                  <Col>
-                    <Text type="secondary" style={{ fontSize: 12, fontWeight: '500' }}>
-                      总使用率: {Math.round(((linkInfo.access_count + (linkInfo.verification_count || 0)) / (linkInfo.max_access_count + (linkInfo.max_verification_count || 0))) * 100)}%
-                    </Text>
-                  </Col>
-                  <Col>
-                    <Text type="secondary" style={{ fontSize: 12, fontWeight: '500' }}>
-                      创建时间: {new Date(linkInfo.created_at).toLocaleDateString('zh-CN')}
-                    </Text>
-                  </Col>
-                </Row>
+                  </div>
+                )}
               </Space>
-            </Card>
-          )}
-
-          {/* 自定义页脚内容 */}
-          {customerSettings?.enableCustomerSiteCustomization && customerSettings?.customerSiteFooterText && (
-            <Card 
-              size="small"
-              style={{ 
-                marginTop: 24,
-                borderRadius: 12,
-                background: 'rgba(255,255,255,0.9)',
-                backdropFilter: 'blur(8px)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
-                textAlign: 'center'
-              }}
-            >
-              <div 
-                dangerouslySetInnerHTML={{ __html: customerSettings.customerSiteFooterText }}
-                style={{ 
-                  fontSize: '14px',
-                  color: '#666',
-                  lineHeight: '1.6'
-                }}
-              />
             </Card>
           )}
         </div>
