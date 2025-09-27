@@ -39,6 +39,7 @@ import {
   AlignRightOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
+import WysiwygEditor from '../components/WysiwygEditor';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -548,44 +549,24 @@ const CustomerSiteSettings: React.FC = () => {
         >
           <Form.Item
             name="customerSiteWelcomeText"
-            label="欢迎文本（富文本编辑器）"
-            extra="支持富文本编辑，包括字体、颜色、图片等，用于在客户端页面顶部显示欢迎信息"
+            label="欢迎文本（所见即所得编辑器）"
+            extra="真正的富文本编辑器，直接显示格式效果，不显示HTML代码"
           >
-            <div>
-              <EnhancedHtmlToolbar textAreaId="textarea-customerSiteWelcomeText" />
-              <Form.Item name="customerSiteWelcomeText" noStyle>
-                <TextArea
-                  id="textarea-customerSiteWelcomeText"
-                  rows={8}
-                  placeholder="输入欢迎文本，使用上方工具栏进行富文本编辑"
-                  style={{ borderRadius: '0 0 6px 6px' }}
-                  onChange={(e) => {
-                    console.log('🔄 欢迎文本内容变化:', e.target.value.length);
-                  }}
-                />
-              </Form.Item>
-            </div>
+            <WysiwygEditor
+              height={300}
+              placeholder="输入欢迎文本，直接看到格式效果..."
+            />
           </Form.Item>
 
           <Form.Item
             name="customerSiteFooterText"
-            label="页脚文本（富文本编辑器）"
-            extra="支持富文本编辑，包括字体、颜色、图片等，用于在客户端页面底部显示信息"
+            label="页脚文本（所见即所得编辑器）"
+            extra="真正的富文本编辑器，直接显示格式效果，不显示HTML代码"
           >
-            <div>
-              <EnhancedHtmlToolbar textAreaId="textarea-customerSiteFooterText" />
-              <Form.Item name="customerSiteFooterText" noStyle>
-                <TextArea
-                  id="textarea-customerSiteFooterText"
-                  rows={6}
-                  placeholder="输入页脚文本，使用上方工具栏进行富文本编辑"
-                  style={{ borderRadius: '0 0 6px 6px' }}
-                  onChange={(e) => {
-                    console.log('🔄 页脚文本内容变化:', e.target.value.length);
-                  }}
-                />
-              </Form.Item>
-            </div>
+            <WysiwygEditor
+              height={200}
+              placeholder="输入页脚文本，直接看到格式效果..."
+            />
           </Form.Item>
         </Card>
 
