@@ -665,27 +665,69 @@ const CustomerPage: React.FC = () => {
         if (newCountdown <= 0) {
           console.log('⏰ 访问会话间隔倒计时结束，访问次数即将增加');
           
-          // 🔥 友好提示：倒计时结束时提醒用户访问次数即将增加
-          if (linkInfo) {
-            const currentPercent = Math.round((linkInfo.access_count / linkInfo.max_access_count) * 100);
-            const nextPercent = Math.round(((linkInfo.access_count + 1) / linkInfo.max_access_count) * 100);
-            
-            if (nextPercent >= 100) {
-              message.warning({
-                content: '访问次数即将达到上限！如需继续使用，请联系管理员。',
-                duration: 8,
-                style: {
-                  marginTop: '20vh',
-                },
+          // 🔥 关键修复：倒计时结束时主动调用API更新访问次数
+          const updateAccessCount = async () => {
+            try {
+              console.log('🔄 倒计时结束，调用API更新访问次数...');
+              const response = await axios.get(`${API_BASE_URL}/api/get_account_info`, {
+                params: { link_id: currentLinkId }
               });
-            } else if (nextPercent >= 80) {
-              const remaining = linkInfo.max_access_count - linkInfo.access_count - 1;
-              message.info({
-                content: `提醒：访问次数即将增加，还剩 ${remaining} 次访问机会。`,
-                duration: 5,
-              });
+
+              if (response.data.success) {
+                const updatedLinkData = response.data.data.link_info;
+                console.log('📊 API返回更新后的访问次数:', updatedLinkData.access_count);
+                
+                // 实时更新linkInfo状态
+                setLinkInfo(prev => prev ? {
+                  ...prev,
+                  access_count: updatedLinkData.access_count,
+                  last_access_time: updatedLinkData.last_access_time
+                } : null);
+
+                // 🔥 友好提示：根据新的访问次数提醒用户
+                const newPercent = Math.round((updatedLinkData.access_count / updatedLinkData.max_access_count) * 100);
+                
+                if (newPercent >= 100) {
+                  message.warning({
+                    content: '访问次数已达到上限！如需继续使用，请联系管理员。',
+                    duration: 8,
+                    style: {
+                      marginTop: '20vh',
+                    },
+                  });
+                } else if (newPercent >= 80) {
+                  const remaining = updatedLinkData.max_access_count - updatedLinkData.access_count;
+                  message.info({
+                    content: `访问次数已增加！还剩 ${remaining} 次访问机会。`,
+                    duration: 5,
+                  });
+                } else {
+                  message.success({
+                    content: `访问次数已增加至 ${updatedLinkData.access_count}/${updatedLinkData.max_access_count}`,
+                    duration: 3,
+                  });
+                }
+
+                // 重新计算下一次倒计时
+                if (updatedLinkData.last_access_time && updatedLinkData.access_session_interval) {
+                  const newLastAccessTime = new Date(updatedLinkData.last_access_time);
+                  const sessionIntervalMs = updatedLinkData.access_session_interval * 60 * 1000;
+                  const elapsedTime = Date.now() - newLastAccessTime.getTime();
+                  const remainingTime = Math.max(0, sessionIntervalMs - elapsedTime);
+                  const remainingSeconds = Math.ceil(remainingTime / 1000);
+                  
+                  console.log('⏰ 重新计算下一次访问会话倒计时:', remainingSeconds, '秒');
+                  setAccessSessionCountdown(remainingSeconds);
+                }
+              }
+            } catch (error) {
+              console.error('❌ 更新访问次数失败:', error);
+              message.error('更新访问次数失败，请刷新页面查看最新状态');
             }
-          }
+          };
+
+          // 异步更新访问次数
+          updateAccessCount();
           
           return 0;
         }
@@ -699,7 +741,7 @@ const CustomerPage: React.FC = () => {
         clearInterval(accessCountdownRef.current);
       }
     };
-  }, [accessSessionCountdown, linkInfo]);
+  }, [accessSessionCountdown, linkInfo, currentLinkId]);
 
   // 组件挂载时获取数据
   useEffect(() => {
