@@ -1025,18 +1025,45 @@ const CustomerPage: React.FC = () => {
       <div className="customer-container" style={{ 
         minHeight: '100vh', 
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        padding: '20px'
+        padding: '20px',
+        position: 'relative'
       }}>
-        <div style={{ maxWidth: 800, margin: '0 auto' }}>
+        {/* 美化背景装饰 */}
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: `
+            radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+            radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+            radial-gradient(circle at 40% 40%, rgba(120, 119, 198, 0.2) 0%, transparent 50%)
+          `,
+          pointerEvents: 'none',
+          zIndex: 0
+        }} />
+        
+        <div style={{ maxWidth: 800, margin: '0 auto', position: 'relative', zIndex: 1 }}>
           {/* 账号信息卡片 */}
           <Card 
             className="customer-card"
             style={{ 
               marginBottom: 24,
-              borderRadius: 12,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+              borderRadius: 16,
+              boxShadow: '0 12px 40px rgba(0,0,0,0.15)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              background: 'rgba(255,255,255,0.95)',
+              backdropFilter: 'blur(10px)',
+              overflow: 'hidden'
             }}
           >
+            {/* 卡片顶部装饰条 */}
+            <div style={{
+              height: '4px',
+              background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
+              margin: '-24px -24px 20px -24px'
+            }} />
             <Row gutter={[24, 24]} align="middle">
               <Col xs={24} sm={8} style={{ textAlign: 'center' }}>
                 <Avatar
@@ -1115,8 +1142,14 @@ const CustomerPage: React.FC = () => {
           <Card
             title={
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span>
-                  <MobileOutlined style={{ marginRight: 8 }} />
+                <span style={{ 
+                  display: 'flex', 
+                  alignItems: 'center',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: '#1890ff'
+                }}>
+                  <MobileOutlined style={{ marginRight: 8, fontSize: '18px' }} />
                   验证码信息
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1136,7 +1169,12 @@ const CustomerPage: React.FC = () => {
                     }
                     loading={loading}
                     style={{
-                      opacity: (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count) ? 0.5 : 1
+                      borderRadius: '8px',
+                      background: progressiveRetrievalState.isActive ? '#faad14' : 
+                                 (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count) ? '#ff4d4f' : '#1890ff',
+                      borderColor: 'transparent',
+                      boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
+                      fontWeight: '600'
                     }}
                   >
                     {progressiveRetrievalState.isActive 
@@ -1150,10 +1188,20 @@ const CustomerPage: React.FC = () => {
               </div>
             }
             style={{ 
-              borderRadius: 12,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+              borderRadius: 16,
+              boxShadow: '0 12px 40px rgba(0,0,0,0.15)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              background: 'rgba(255,255,255,0.95)',
+              backdropFilter: 'blur(10px)',
+              overflow: 'hidden'
             }}
           >
+            {/* 卡片顶部装饰条 */}
+            <div style={{
+              height: '4px',
+              background: 'linear-gradient(90deg, #52c41a 0%, #1890ff 100%)',
+              margin: '-24px -24px 20px -24px'
+            }} />
             {/* 🔥 渐进式获取状态显示 - 显示每条短信的独立倒计时 */}
             {progressiveRetrievalState.isActive && (
               <div style={{ 
@@ -1626,20 +1674,23 @@ const CustomerPage: React.FC = () => {
           {/* 使用统计和限制信息 */}
           {linkInfo && (
             <Card
-              title={
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <ClockCircleOutlined style={{ color: '#1890ff' }} />
-                  <Text strong style={{ color: '#1890ff' }}>使用限制信息</Text>
-                </div>
-              }
               size="small"
               style={{ 
-                marginTop: 16,
-                borderRadius: 12,
+                marginTop: 20,
+                borderRadius: 16,
                 background: 'rgba(255,255,255,0.95)',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.1)'
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                overflow: 'hidden'
               }}
             >
+              {/* 统计卡片装饰条 */}
+              <div style={{
+                height: '3px',
+                background: 'linear-gradient(90deg, #faad14 0%, #1890ff 50%, #52c41a 100%)',
+                margin: '-16px -16px 16px -16px'
+              }} />
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 {/* 访问次数统计 */}
                 <div>
