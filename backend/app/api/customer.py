@@ -192,6 +192,7 @@ async def get_account_info(
             "max_verification_count": link.max_verification_count,
             "verification_wait_time": link.verification_wait_time,  # 验证码等待时间
             "access_session_interval": link.access_session_interval,  # 访问会话间隔
+            "last_access_time": link.last_access_time.isoformat() if link.last_access_time else None,  # 🔥 新增：最后访问时间
             "last_verification_time": link.last_verification_time.isoformat() if link.last_verification_time else None,
             "is_active": link.is_active,
             "created_at": link.created_at.isoformat() if link.created_at else None
