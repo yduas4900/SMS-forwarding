@@ -193,9 +193,26 @@ const CustomerPage: React.FC = () => {
         });
         
         setLinkInfo(linkData);
+        setLastRefresh(new Date());
+
+        // 🔥 关键修复：页面加载时立即检查访问次数是否已达上限
+        console.log('🔍 页面加载时检查访问次数限制:', {
+          current: linkData.access_count,
+          max: linkData.max_access_count,
+          isLimitReached: linkData.access_count >= linkData.max_access_count
+        });
+
+        if (linkData.access_count >= linkData.max_access_count) {
+          console.log('🚫 页面加载时发现访问次数已达上限，立即跳转到访问受限页面');
+          setAccessDenied(true);
+          setError('此链接的访问次数已达上限，无法继续访问，请联系管理员。');
+          setLoading(false);
+          return; // 停止后续处理
+        }
+
+        // 如果没有达到上限，继续正常流程
         setAccessDenied(false);
         setError(null);
-        setLastRefresh(new Date());
 
         // 🔥 新增：计算访问会话间隔倒计时
         if (linkData.last_access_time && linkData.access_session_interval) {
