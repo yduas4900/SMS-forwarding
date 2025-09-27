@@ -383,11 +383,14 @@ const CustomerPage: React.FC = () => {
     }
   }, [linkInfo, progressiveRetrievalState.isActive]);
 
-  // 🔥 获取指定序号的短信
-  const retrieveSpecificSms = useCallback(async (smsIndex: number) => {
+  // 🔥 获取指定序号的短信（优化版本，增加重试机制）
+  const retrieveSpecificSms = useCallback(async (smsIndex: number, retryCount: number = 0) => {
     if (!currentLinkId) return;
 
-    console.log(`🔍 正在获取第 ${smsIndex} 条短信...`);
+    const maxRetries = 3; // 最大重试次数
+    const retryDelay = 2000; // 重试延迟2秒
+
+    console.log(`🔍 正在获取第 ${smsIndex} 条短信... (尝试 ${retryCount + 1}/${maxRetries + 1})`);
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/get_verification_code?link_id=${currentLinkId}`, {
@@ -396,6 +399,40 @@ const CustomerPage: React.FC = () => {
           'Content-Type': 'application/json',
         },
       });
+
+      // 🔥 优化：处理429错误（频率限制）
+      if (response.status === 429) {
+        console.warn(`⚠️ 第 ${smsIndex} 条短信获取遇到频率限制 (HTTP 429)`);
+        
+        if (retryCount < maxRetries) {
+          console.log(`🔄 将在 ${retryDelay/1000} 秒后重试第 ${smsIndex} 条短信...`);
+          
+          // 更新槽位状态为等待重试
+          setProgressiveRetrievalState(prev => ({
+            ...prev,
+            smsSlots: prev.smsSlots.map(slot => 
+              slot.index === smsIndex 
+                ? { 
+                    ...slot, 
+                    status: 'waiting',
+                    countdown: Math.ceil(retryDelay / 1000),
+                    message: `第 ${smsIndex} 条短信重试中... (${retryCount + 1}/${maxRetries + 1})`
+                  }
+                : slot
+            )
+          }));
+
+          // 延迟后重试
+          setTimeout(() => {
+            retrieveSpecificSms(smsIndex, retryCount + 1);
+          }, retryDelay);
+          
+          return;
+        } else {
+          console.error(`❌ 第 ${smsIndex} 条短信重试次数已达上限`);
+          throw new Error(`频率限制，重试失败`);
+        }
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -533,6 +570,35 @@ const CustomerPage: React.FC = () => {
       }
 
     } catch (error) {
+      console.error(`❌ 第 ${smsIndex} 条短信获取失败:`, error);
+      
+      // 🔥 优化：对于网络错误或其他错误，也尝试重试
+      if (retryCount < maxRetries && error.message.includes('HTTP')) {
+        console.log(`🔄 网络错误，将在 ${retryDelay/1000} 秒后重试第 ${smsIndex} 条短信...`);
+        
+        // 更新槽位状态为等待重试
+        setProgressiveRetrievalState(prev => ({
+          ...prev,
+          smsSlots: prev.smsSlots.map(slot => 
+            slot.index === smsIndex 
+              ? { 
+                  ...slot, 
+                  status: 'waiting',
+                  countdown: Math.ceil(retryDelay / 1000),
+                  message: `第 ${smsIndex} 条短信重试中... (${retryCount + 1}/${maxRetries + 1})`
+                }
+              : slot
+          )
+        }));
+
+        // 延迟后重试
+        setTimeout(() => {
+          retrieveSpecificSms(smsIndex, retryCount + 1);
+        }, retryDelay);
+        
+        return;
+      }
+      
       // 错误处理，标记为完成
       setProgressiveRetrievalState(prev => ({
         ...prev,
@@ -541,12 +607,11 @@ const CustomerPage: React.FC = () => {
             ? { 
                 ...slot, 
                 status: 'completed',
-                message: `第 ${smsIndex} 条短信获取失败`
+                message: retryCount > 0 ? `第 ${smsIndex} 条短信重试失败` : `第 ${smsIndex} 条短信获取失败`
               }
             : slot
         )
       }));
-      console.error(`❌ 第 ${smsIndex} 条短信获取失败:`, error);
     }
   }, [currentLinkId, progressiveRetrievalState.retrievedSmsIds]);
 
