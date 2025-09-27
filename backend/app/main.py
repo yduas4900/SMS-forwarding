@@ -129,7 +129,7 @@ try:
     app.include_router(sms.router, prefix="/api/sms", tags=["短信管理"])
     app.include_router(links.router, prefix="/api/links", tags=["链接管理"])
     app.include_router(service_types.router, tags=["服务类型管理"])
-    app.include_router(settings_api.router, tags=["系统设置"])
+    app.include_router(settings_api.router, prefix="/api/settings", tags=["系统设置"])
     app.include_router(websocket_routes.router, prefix="/api", tags=["WebSocket通信"])
     app.include_router(customer.router, prefix="/api", tags=["客户端访问"])
     app.include_router(images.router, prefix="/api", tags=["图片访问"])
