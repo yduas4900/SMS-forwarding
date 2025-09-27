@@ -133,6 +133,12 @@ const CustomerSiteSettings: React.FC = () => {
     }
   };
 
+  // 添加按钮点击处理函数
+  const handleSaveButtonClick = () => {
+    console.log('🖱️ 保存按钮被点击');
+    form.submit(); // 手动触发表单提交
+  };
+
   // 重置设置
   const handleReset = () => {
     form.resetFields();
@@ -359,7 +365,7 @@ const CustomerSiteSettings: React.FC = () => {
             <Button
               type="primary"
               icon={<SaveOutlined />}
-              htmlType="submit"
+              onClick={handleSaveButtonClick}
               loading={loading}
               size="large"
             >
