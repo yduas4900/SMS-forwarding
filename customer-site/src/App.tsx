@@ -5,7 +5,7 @@ import zhCN from 'antd/locale/zh_CN';
 import 'antd/dist/reset.css';
 import './App.css';
 
-import CustomerPage from './pages/CustomerPage';
+import CustomerPage from './pages/CustomerPage_Enhanced';
 
 const App: React.FC = () => {
   return (
