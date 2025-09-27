@@ -936,20 +936,41 @@ const CustomerPage: React.FC = () => {
       <div className="customer-container" style={{ 
         minHeight: '100vh', 
         background: customerSettings?.customerSiteBackgroundColor || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        padding: '20px'
+        padding: '20px',
+        position: 'relative'
       }}>
+        {/* 美化背景装饰 */}
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: `
+            radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+            radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+            radial-gradient(circle at 40% 40%, rgba(120, 119, 198, 0.2) 0%, transparent 50%)
+          `,
+          pointerEvents: 'none',
+          zIndex: 0
+        }} />
+        
         {/* 自定义CSS样式 */}
         {customerSettings?.customerSiteCustomCSS && (
           <style dangerouslySetInnerHTML={{ __html: customerSettings.customerSiteCustomCSS }} />
         )}
-        <div style={{ maxWidth: 800, margin: '0 auto' }}>
+        
+        <div style={{ maxWidth: 800, margin: '0 auto', position: 'relative', zIndex: 1 }}>
           {/* 自定义欢迎内容 */}
           {customerSettings?.enableCustomerSiteCustomization && customerSettings?.customerSiteWelcomeText && (
             <Card 
               style={{ 
                 marginBottom: 24,
-                borderRadius: 12,
-                boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+                borderRadius: 16,
+                boxShadow: '0 12px 40px rgba(0,0,0,0.15)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                background: 'rgba(255,255,255,0.95)',
+                backdropFilter: 'blur(10px)'
               }}
             >
               <div 
@@ -964,16 +985,25 @@ const CustomerPage: React.FC = () => {
             </Card>
           )}
 
-
           {/* 账号信息卡片 */}
           <Card 
             className="customer-card"
             style={{ 
               marginBottom: 24,
-              borderRadius: 12,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+              borderRadius: 16,
+              boxShadow: '0 12px 40px rgba(0,0,0,0.15)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              background: 'rgba(255,255,255,0.95)',
+              backdropFilter: 'blur(10px)',
+              overflow: 'hidden'
             }}
           >
+            {/* 卡片顶部装饰条 */}
+            <div style={{
+              height: '4px',
+              background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
+              margin: '-24px -24px 20px -24px'
+            }} />
             <Row gutter={[24, 24]} align="middle">
               <Col xs={24} sm={8} style={{ textAlign: 'center' }}>
                 <Avatar
@@ -1052,8 +1082,14 @@ const CustomerPage: React.FC = () => {
           <Card
             title={
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span>
-                  <MobileOutlined style={{ marginRight: 8 }} />
+                <span style={{ 
+                  display: 'flex', 
+                  alignItems: 'center',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: '#1890ff'
+                }}>
+                  <MobileOutlined style={{ marginRight: 8, fontSize: '18px' }} />
                   验证码信息
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1073,6 +1109,15 @@ const CustomerPage: React.FC = () => {
                        linkInfo.verification_count >= linkInfo.max_verification_count)
                     }
                     loading={loading}
+                    style={{
+                      borderRadius: '8px',
+                      background: progressiveRetrievalState.isActive ? '#faad14' : 
+                                 (linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && 
+                                  linkInfo.verification_count >= linkInfo.max_verification_count) ? '#ff4d4f' : '#1890ff',
+                      borderColor: 'transparent',
+                      boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
+                      fontWeight: '600'
+                    }}
                   >
                     {progressiveRetrievalState.isActive ? '获取中...' : 
                      (linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && 
@@ -1082,10 +1127,20 @@ const CustomerPage: React.FC = () => {
               </div>
             }
             style={{ 
-              borderRadius: 12,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+              borderRadius: 16,
+              boxShadow: '0 12px 40px rgba(0,0,0,0.15)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              background: 'rgba(255,255,255,0.95)',
+              backdropFilter: 'blur(10px)',
+              overflow: 'hidden'
             }}
           >
+            {/* 卡片顶部装饰条 */}
+            <div style={{
+              height: '4px',
+              background: 'linear-gradient(90deg, #52c41a 0%, #1890ff 100%)',
+              margin: '-24px -24px 20px -24px'
+            }} />
             {/* 🔥 渐进式获取状态显示 - 显示每条短信的独立倒计时 */}
             {progressiveRetrievalState.isActive && (
               <div style={{ 
@@ -1197,79 +1252,105 @@ const CustomerPage: React.FC = () => {
                         key={code.id}
                         size="small"
                         style={{
-                          background: code.is_used ? '#f5f5f5' : '#fff',
+                          background: code.is_used ? 'rgba(245,245,245,0.8)' : 'rgba(255,255,255,0.95)',
                           border: `2px solid ${code.is_used ? '#d9d9d9' : '#1890ff'}`,
-                          borderRadius: 12,
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                          borderRadius: 16,
+                          boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                          backdropFilter: 'blur(8px)',
+                          overflow: 'hidden',
+                          transition: 'all 0.3s ease',
+                          position: 'relative'
                         }}
                       >
+                        {/* 验证码卡片装饰条 */}
+                        <div style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          height: '3px',
+                          background: code.is_used ? 
+                            'linear-gradient(90deg, #d9d9d9 0%, #f0f0f0 100%)' : 
+                            'linear-gradient(90deg, #52c41a 0%, #1890ff 100%)'
+                        }} />
+                        
                         {/* 🔥 修复：在第一个验证码卡片顶部显示限制提示，不影响布局 */}
                         {index === 0 && isLimitReached && (
                           <div style={{
-                            padding: '8px 12px',
-                            marginBottom: '12px',
-                            backgroundColor: '#fff7e6',
-                            borderRadius: '6px',
+                            padding: '10px 16px',
+                            marginTop: '8px',
+                            marginBottom: '16px',
+                            backgroundColor: 'rgba(255, 247, 230, 0.9)',
+                            borderRadius: '8px',
                             border: '1px solid #ffd591',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '8px'
+                            gap: '10px',
+                            backdropFilter: 'blur(4px)'
                           }}>
-                            <ExclamationCircleOutlined style={{ color: '#faad14', fontSize: 16 }} />
-                            <Text style={{ fontSize: 12, color: '#d46b08' }}>
+                            <ExclamationCircleOutlined style={{ color: '#faad14', fontSize: 18 }} />
+                            <Text style={{ fontSize: 13, color: '#d46b08', fontWeight: '500' }}>
                               验证码获取次数已达上限，无法继续获取新的验证码
                             </Text>
                           </div>
                         )}
                         
-                        <Row align="middle" justify="space-between">
-                          <Col flex="auto">
-                            <Space direction="vertical" size={6}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                <Text
-                                  strong
-                                  style={{
-                                    fontSize: 20,
-                                    fontFamily: 'monospace',
-                                    color: code.is_used ? '#999' : '#1890ff',
-                                    letterSpacing: '2px'
-                                  }}
-                                >
-                                  {code.code}
-                                </Text>
-                                {code.is_used && (
-                                  <Tag color="default" size="small">已使用</Tag>
-                                )}
-                                {code.progressive_index && (
-                                  <Tag color="blue" size="small">
-                                    第{code.progressive_index}条
+                        <div style={{ padding: index === 0 && isLimitReached ? '8px 16px 16px' : '16px' }}>
+                          <Row align="middle" justify="space-between">
+                            <Col flex="auto">
+                              <Space direction="vertical" size={8}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                  <Text
+                                    strong
+                                    style={{
+                                      fontSize: 24,
+                                      fontFamily: 'SF Mono, Monaco, Consolas, monospace',
+                                      color: code.is_used ? '#999' : '#1890ff',
+                                      letterSpacing: '3px',
+                                      textShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                    }}
+                                  >
+                                    {code.code}
+                                  </Text>
+                                  {code.is_used && (
+                                    <Tag color="default" size="small" style={{ borderRadius: '12px' }}>已使用</Tag>
+                                  )}
+                                  {code.progressive_index && (
+                                    <Tag color="blue" size="small" style={{ borderRadius: '12px' }}>
+                                      第{code.progressive_index}条
+                                    </Tag>
+                                  )}
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                  <ClockCircleOutlined style={{ color: freshness.color, fontSize: 14 }} />
+                                  <Text type="secondary" style={{ fontSize: 12 }}>
+                                    {formatTime(code.received_at)}
+                                  </Text>
+                                  <Tag color={freshness.color} size="small" style={{ borderRadius: '10px' }}>
+                                    {freshness.text}
                                   </Tag>
-                                )}
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <ClockCircleOutlined style={{ color: freshness.color }} />
-                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                  {formatTime(code.received_at)}
-                                </Text>
-                                <Tag color={freshness.color} size="small">
-                                  {freshness.text}
-                                </Tag>
-                              </div>
-                            </Space>
-                          </Col>
-                          <Col>
-                            <Button
-                              type="primary"
-                              ghost
-                              icon={<CopyOutlined />}
-                              size="small"
-                              onClick={() => copyToClipboard(code.code, '验证码')}
-                              disabled={code.is_used}
-                            >
-                              复制
-                            </Button>
-                          </Col>
-                        </Row>
+                                </div>
+                              </Space>
+                            </Col>
+                            <Col>
+                              <Button
+                                type="primary"
+                                ghost
+                                icon={<CopyOutlined />}
+                                size="small"
+                                onClick={() => copyToClipboard(code.code, '验证码')}
+                                disabled={code.is_used}
+                                style={{
+                                  borderRadius: '10px',
+                                  fontWeight: '500',
+                                  boxShadow: '0 2px 8px rgba(24, 144, 255, 0.2)'
+                                }}
+                              >
+                                复制
+                              </Button>
+                            </Col>
+                          </Row>
+                        </div>
                       </Card>
                     );
                   })}
@@ -1304,16 +1385,32 @@ const CustomerPage: React.FC = () => {
             <Card
               size="small"
               style={{ 
-                marginTop: 16,
-                borderRadius: 8,
-                background: 'rgba(255,255,255,0.9)'
+                marginTop: 20,
+                borderRadius: 16,
+                background: 'rgba(255,255,255,0.95)',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                overflow: 'hidden'
               }}
             >
+              {/* 统计卡片装饰条 */}
+              <div style={{
+                height: '3px',
+                background: 'linear-gradient(90deg, #faad14 0%, #1890ff 50%, #52c41a 100%)',
+                margin: '-16px -16px 16px -16px'
+              }} />
+              
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 {/* 访问次数统计 */}
-                <Row justify="space-between" align="middle">
+                <Row justify="space-between" align="middle" style={{
+                  padding: '8px 12px',
+                  backgroundColor: 'rgba(24, 144, 255, 0.05)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(24, 144, 255, 0.1)'
+                }}>
                   <Col>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '500', color: '#1890ff' }}>
                       访问次数: {linkInfo.access_count} / {linkInfo.max_access_count}
                     </Text>
                   </Col>
@@ -1321,10 +1418,12 @@ const CustomerPage: React.FC = () => {
                     <Progress
                       percent={Math.round((linkInfo.access_count / linkInfo.max_access_count) * 100)}
                       size="small"
-                      style={{ width: 100 }}
-                      strokeColor={
-                        linkInfo.access_count >= linkInfo.max_access_count ? '#ff4d4f' : '#1890ff'
-                      }
+                      style={{ width: 120 }}
+                      strokeColor={{
+                        '0%': '#1890ff',
+                        '100%': linkInfo.access_count >= linkInfo.max_access_count ? '#ff4d4f' : '#52c41a'
+                      }}
+                      trailColor="rgba(24, 144, 255, 0.1)"
                     />
                   </Col>
                 </Row>
@@ -1332,13 +1431,14 @@ const CustomerPage: React.FC = () => {
                 {/* 🔥 新增：访问会话间隔倒计时 */}
                 {linkInfo.access_session_interval && accessSessionCountdown > 0 && (
                   <Row justify="space-between" align="middle" style={{ 
-                    padding: '8px 12px',
-                    backgroundColor: '#fff7e6',
-                    borderRadius: '6px',
-                    border: '1px solid #ffd591'
+                    padding: '10px 14px',
+                    backgroundColor: 'rgba(250, 173, 20, 0.1)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(250, 173, 20, 0.2)',
+                    background: 'linear-gradient(135deg, rgba(255, 247, 230, 0.8) 0%, rgba(255, 247, 230, 0.4) 100%)'
                   }}>
                     <Col>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: '#fa8c16' }}>
                         会话倒计时: {Math.floor(accessSessionCountdown / 60)}分{accessSessionCountdown % 60}秒后访问次数+1
                       </Text>
                     </Col>
@@ -1346,16 +1446,19 @@ const CustomerPage: React.FC = () => {
                       <div style={{ 
                         display: 'flex', 
                         alignItems: 'center', 
-                        gap: '8px' 
+                        gap: '10px',
+                        padding: '4px 8px',
+                        backgroundColor: 'rgba(250, 173, 20, 0.15)',
+                        borderRadius: '6px'
                       }}>
-                        <ClockCircleOutlined style={{ color: '#fa8c16', fontSize: 14 }} />
+                        <ClockCircleOutlined style={{ color: '#fa8c16', fontSize: 16 }} />
                         <Text 
                           style={{ 
-                            fontSize: 14, 
+                            fontSize: 16, 
                             fontWeight: 'bold', 
                             color: '#fa8c16',
-                            fontFamily: 'monospace',
-                            minWidth: '40px',
+                            fontFamily: 'SF Mono, Monaco, Consolas, monospace',
+                            minWidth: '45px',
                             textAlign: 'center'
                           }}
                         >
@@ -1367,9 +1470,14 @@ const CustomerPage: React.FC = () => {
                 )}
 
                 {/* 验证码获取统计 */}
-                <Row justify="space-between" align="middle">
+                <Row justify="space-between" align="middle" style={{
+                  padding: '8px 12px',
+                  backgroundColor: 'rgba(82, 196, 26, 0.05)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(82, 196, 26, 0.1)'
+                }}>
                   <Col>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '500', color: '#52c41a' }}>
                       验证码次数: {linkInfo.verification_count || 0} / {linkInfo.max_verification_count || 0}
                     </Text>
                   </Col>
@@ -1377,23 +1485,29 @@ const CustomerPage: React.FC = () => {
                     <Progress
                       percent={linkInfo.max_verification_count ? Math.round(((linkInfo.verification_count || 0) / linkInfo.max_verification_count) * 100) : 0}
                       size="small"
-                      style={{ width: 100 }}
-                      strokeColor={
-                        (linkInfo.verification_count || 0) >= (linkInfo.max_verification_count || 0) ? '#ff4d4f' : '#52c41a'
-                      }
+                      style={{ width: 120 }}
+                      strokeColor={{
+                        '0%': '#52c41a',
+                        '100%': (linkInfo.verification_count || 0) >= (linkInfo.max_verification_count || 0) ? '#ff4d4f' : '#52c41a'
+                      }}
+                      trailColor="rgba(82, 196, 26, 0.1)"
                     />
                   </Col>
                 </Row>
 
                 {/* 总体使用情况 */}
-                <Row justify="space-between" align="middle" style={{ paddingTop: 8, borderTop: '1px solid #f0f0f0' }}>
+                <Row justify="space-between" align="middle" style={{ 
+                  paddingTop: 12, 
+                  borderTop: '1px solid rgba(0,0,0,0.06)',
+                  marginTop: 8
+                }}>
                   <Col>
-                    <Text type="secondary" style={{ fontSize: 11 }}>
+                    <Text type="secondary" style={{ fontSize: 12, fontWeight: '500' }}>
                       总使用率: {Math.round(((linkInfo.access_count + (linkInfo.verification_count || 0)) / (linkInfo.max_access_count + (linkInfo.max_verification_count || 0))) * 100)}%
                     </Text>
                   </Col>
                   <Col>
-                    <Text type="secondary" style={{ fontSize: 11 }}>
+                    <Text type="secondary" style={{ fontSize: 12, fontWeight: '500' }}>
                       创建时间: {new Date(linkInfo.created_at).toLocaleDateString('zh-CN')}
                     </Text>
                   </Col>
@@ -1408,8 +1522,11 @@ const CustomerPage: React.FC = () => {
               size="small"
               style={{ 
                 marginTop: 24,
-                borderRadius: 8,
+                borderRadius: 12,
                 background: 'rgba(255,255,255,0.9)',
+                backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
                 textAlign: 'center'
               }}
             >
@@ -1417,7 +1534,8 @@ const CustomerPage: React.FC = () => {
                 dangerouslySetInnerHTML={{ __html: customerSettings.customerSiteFooterText }}
                 style={{ 
                   fontSize: '14px',
-                  color: '#666'
+                  color: '#666',
+                  lineHeight: '1.6'
                 }}
               />
             </Card>
