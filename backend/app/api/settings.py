@@ -53,7 +53,6 @@ class SystemSettingsModel(BaseModel):
     customerSiteWelcomeText: str = Field(default="<h2>欢迎使用验证码获取服务</h2><p>请按照以下步骤获取您的验证码：</p><ol><li>复制用户名和密码</li><li>点击获取验证码按钮</li><li>等待验证码到达</li></ol>", description="客户端欢迎文本（支持HTML）")
     customerSiteFooterText: str = Field(default="<p>如有问题，请联系客服。</p>", description="客户端页脚文本（支持HTML）")
     customerSiteBackgroundColor: str = Field(default="linear-gradient(135deg, #667eea 0%, #764ba2 100%)", description="客户端背景色")
-    customerSiteLogoUrl: Optional[str] = Field(default=None, description="客户端Logo URL")
     customerSiteCustomCSS: str = Field(default="", description="客户端自定义CSS")
     enableCustomerSiteCustomization: bool = Field(default=True, description="启用客户端自定义")
 

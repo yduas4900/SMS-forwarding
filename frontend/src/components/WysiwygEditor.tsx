@@ -45,6 +45,36 @@ const WysiwygEditor: React.FC<WysiwygEditorProps> = ({
   const [selectedColor, setSelectedColor] = useState('#000000');
   const [fontSize, setFontSize] = useState(16);
   const [fontFamily, setFontFamily] = useState('Microsoft YaHei');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  // 表情数据
+  const emojis = [
+    // 笑脸表情
+    '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇',
+    '🥰', '😍', '🤩', '😘', '😗', '😚', '😙', '😋', '😛', '😜', '🤪', '😝', '🤑',
+    
+    // 情感表情
+    '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬',
+    '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵',
+    '🥶', '🥴', '😵', '🤯', '🤠', '🥳', '😎', '🤓', '🧐',
+    
+    // 动物表情
+    '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷',
+    '🐸', '🐵', '🙈', '🙉', '🙊', '🐒', '🐔', '🐧', '🐦', '🐤', '🐣', '🐥', '🦆',
+    
+    // 手势表情
+    '👍', '👎', '👌', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇',
+    '☝️', '👋', '🤚', '🖐️', '✋', '🖖', '👏', '🙌', '🤲', '🤝', '🙏',
+    
+    // 心形表情
+    '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞',
+    '💓', '💗', '💖', '💘', '💝', '💟',
+    
+    // 其他常用
+    '⭐', '🌟', '✨', '💫', '🔥', '💯', '✅', '❌', '⚡', '💎', '🎉', '🎊', '🎈',
+    '🎁', '🏆', '🥇', '🥈', '🥉', '🎯', '🎪', '🎭', '🎨', '🎬', '🎤', '🎧', '🎵',
+    '🎶', '🎸', '🎹', '🎺', '🎻', '🥁', '📱', '💻', '⌨️', '🖥️', '🖨️', '📷', '📹'
+  ];
 
   // 初始化编辑器内容
   useEffect(() => {
@@ -150,6 +180,12 @@ const WysiwygEditor: React.FC<WysiwygEditorProps> = ({
       const selectedText = selection?.toString() || '链接文本';
       insertHTML(`<a href="${url}" target="_blank" style="color: ${selectedColor};">${selectedText}</a>`);
     }
+  };
+
+  // 插入表情
+  const insertEmoji = (emoji: string) => {
+    insertHTML(`<span style="font-size: ${fontSize + 4}px;">${emoji}</span>`);
+    setShowEmojiPicker(false); // 插入后关闭表情选择器
   };
 
   // 工具栏组件
@@ -331,8 +367,52 @@ const WysiwygEditor: React.FC<WysiwygEditorProps> = ({
           >
             分割线
           </Button>
+          
+          <Button
+            size="small"
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+          >
+            😀 表情
+          </Button>
         </Space>
       </div>
+
+      {/* 表情选择器 */}
+      {showEmojiPicker && (
+        <div style={{
+          marginTop: 8,
+          padding: 12,
+          background: '#fff',
+          border: '1px solid #d9d9d9',
+          borderRadius: 6,
+          maxHeight: 200,
+          overflowY: 'auto'
+        }}>
+          <div style={{ marginBottom: 8, fontSize: 12, color: '#666' }}>点击表情插入到编辑器：</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {emojis.map((emoji, index) => (
+              <button
+                key={index}
+                onClick={() => insertEmoji(emoji)}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  fontSize: 20,
+                  cursor: 'pointer',
+                  padding: 4,
+                  borderRadius: 4,
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#f0f0f0'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                title={emoji}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 样式预览 */}
       <div style={{
