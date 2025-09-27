@@ -113,20 +113,36 @@ const CustomerPage: React.FC = () => {
   // 获取客户端设置
   const fetchCustomerSettings = async () => {
     try {
+      console.log('🔧 开始获取客户端设置...');
+      console.log('🔗 API URL:', `${API_BASE_URL}/api/settings/customer-site/public`);
+      
       // 使用公开API端点，无需认证
       const response = await axios.get(`${API_BASE_URL}/api/settings/customer-site/public`);
+      
+      console.log('📥 客户端设置API响应:', response.data);
+      
       if (response.data.success) {
+        console.log('✅ 客户端设置获取成功:', response.data.data);
         setCustomerSettings(response.data.data);
         
         // 动态设置页面标题
         if (response.data.data.customerSiteTitle) {
           document.title = response.data.data.customerSiteTitle;
+          console.log('📄 页面标题已更新为:', response.data.data.customerSiteTitle);
         }
+        
+        // 检查欢迎文本
+        if (response.data.data.customerSiteWelcomeText) {
+          console.log('🎉 欢迎文本内容:', response.data.data.customerSiteWelcomeText);
+        }
+      } else {
+        console.warn('⚠️ 客户端设置API返回失败:', response.data);
+        throw new Error('API返回失败');
       }
     } catch (error) {
-      console.log('获取客户端设置失败，使用默认设置:', error);
+      console.error('❌ 获取客户端设置失败，使用默认设置:', error);
       // 使用默认设置
-      setCustomerSettings({
+      const defaultSettings = {
         customerSiteTitle: '验证码获取服务',
         customerSiteDescription: '安全便捷的验证码获取服务',
         customerSiteWelcomeText: '<h2>欢迎使用验证码获取服务</h2><p>请按照以下步骤获取您的验证码：</p><ol><li>复制用户名和密码</li><li>点击获取验证码按钮</li><li>等待验证码到达</li></ol>',
@@ -135,7 +151,9 @@ const CustomerPage: React.FC = () => {
         customerSiteLogoUrl: '',
         customerSiteCustomCSS: '',
         enableCustomerSiteCustomization: true
-      });
+      };
+      console.log('🔄 使用默认设置:', defaultSettings);
+      setCustomerSettings(defaultSettings);
     }
   };
 
