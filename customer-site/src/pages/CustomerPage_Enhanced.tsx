@@ -213,19 +213,6 @@ const CustomerPage: React.FC = () => {
         setLastRefresh(new Date());
 
         // 🔥 关键修复：页面加载时立即检查访问次数是否已达上限
-        console.log('🔍 页面加载时检查访问次数限制:', {
-          current: linkData.access_count,
-          max: linkData.max_access_count,
-          isLimitReached: linkData.access_count >= linkData.max_access_count
-        });
-
-        // 🔥 新增：页面加载时也检查验证码次数限制
-        console.log('🔍 页面加载时检查验证码次数限制:', {
-          verificationCurrent: linkData.verification_count,
-          verificationMax: linkData.max_verification_count,
-          isVerificationLimitReached: linkData.verification_count !== undefined && linkData.max_verification_count !== undefined && linkData.verification_count >= linkData.max_verification_count
-        });
-
         if (linkData.access_count >= linkData.max_access_count) {
           console.log('🚫 页面加载时发现访问次数已达上限，立即跳转到访问受限页面');
           setAccessDenied(true);
@@ -256,25 +243,6 @@ const CustomerPage: React.FC = () => {
 
           setAccessSessionCountdown(remainingSeconds);
         }
-
-        // 🔥 关键修复：只在页面刷新时保留短信，新打开页面时不保留
-        // 检测是否为页面刷新：通过检查performance.navigation.type
-        const isPageRefresh = performance.navigation && performance.navigation.type === 1;
-        const isBackForward = performance.navigation && performance.navigation.type === 2;
-        
-        console.log('🔍 页面加载类型检测:', {
-          navigationType: performance.navigation?.type,
-          isPageRefresh,
-          isBackForward,
-          userAgent: navigator.userAgent
-        });
-
-        if (isPageRefresh || isBackForward) {
-          console.log('🔄 检测到页面刷新或前进后退，保留已有短信');
-          await fetchExistingSms();
-        } else {
-          console.log('🆕 检测到新打开页面，不保留短信，从空白状态开始');
-        }
       } else {
         if (response.data.error === 'access_limit_exceeded') {
           setAccessDenied(true);
@@ -295,69 +263,6 @@ const CustomerPage: React.FC = () => {
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  // 🔥 恢复功能：获取已有的短信（页面刷新时保留验证码）
-  const fetchExistingSms = async () => {
-    if (!currentLinkId) return;
-
-    try {
-      console.log('🔄 获取已有短信，保留页面刷新前的验证码...');
-      console.log('🔗 API URL:', `${API_BASE_URL}/api/get_existing_sms?link_id=${currentLinkId}`);
-      
-      const response = await fetch(`${API_BASE_URL}/api/get_existing_sms?link_id=${currentLinkId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      console.log('📡 API响应状态:', response.status);
-
-      if (!response.ok) {
-        console.warn('获取已有短信失败，继续正常流程，状态码:', response.status);
-        return;
-      }
-
-      const data = await response.json();
-      console.log('📥 已有短信API响应:', data);
-
-      if (data.success && data.data?.all_matched_sms?.length > 0) {
-        // 将已有短信转换为验证码格式
-        const existingCodes: VerificationCode[] = data.data.all_matched_sms.map((sms: any, index: number) => {
-          const extractedCode = extractVerificationCode(sms.content);
-          return {
-            id: sms.id,
-            code: extractedCode || sms.content,
-            received_at: sms.sms_timestamp || new Date().toISOString(),
-            is_used: false,
-            full_content: sms.content,
-            sender: sms.sender,
-            progressive_index: index + 1
-          };
-        });
-
-        console.log('🔄 转换后的验证码数据:', existingCodes);
-
-        // 更新账号信息，保留已有的验证码
-        setAccountInfo(prev => {
-          const updated = prev ? {
-            ...prev,
-            verification_codes: existingCodes
-          } : null;
-          console.log('📱 更新后的accountInfo:', updated);
-          return updated;
-        });
-
-        console.log(`✅ 页面刷新保留了 ${existingCodes.length} 条已有验证码`);
-        message.success(`页面刷新保留了 ${existingCodes.length} 条已有验证码`);
-      } else {
-        console.log('📭 没有已有短信需要保留');
-      }
-    } catch (error) {
-      console.error('❌ 获取已有短信失败:', error);
-      // 不影响主流程，继续正常运行
     }
   };
 
@@ -656,94 +561,24 @@ const CustomerPage: React.FC = () => {
     return () => clearInterval(timer);
   }, [progressiveRetrievalState.isActive, retrieveSpecificSms]);
 
-  // 🔥 智能验证码识别函数 - 支持国内外各种格式
+  // 提取验证码的辅助函数
   const extractVerificationCode = (content: string): string | null => {
-    // 🌍 国内外验证码识别模式
     const patterns = [
-      // 🇨🇳 中文验证码模式
-      /验证码[：:\s]*([A-Za-z0-9]{3,8})/i,
-      /验证码为[：:\s]*([A-Za-z0-9]{3,8})/i,
-      /验证码是[：:\s]*([A-Za-z0-9]{3,8})/i,
-      /动态码[：:\s]*([A-Za-z0-9]{3,8})/i,
-      /校验码[：:\s]*([A-Za-z0-9]{3,8})/i,
-      /安全码[：:\s]*([A-Za-z0-9]{3,8})/i,
-      /([A-Za-z0-9]{3,8})[^A-Za-z0-9]*验证码/i,
-      /([A-Za-z0-9]{3,8})[^A-Za-z0-9]*动态码/i,
-      
-      // 🇺🇸 英文验证码模式
-      /verification code[：:\s]*([A-Za-z0-9]{3,8})/i,
-      /verify code[：:\s]*([A-Za-z0-9]{3,8})/i,
-      /auth code[：:\s]*([A-Za-z0-9]{3,8})/i,
-      /security code[：:\s]*([A-Za-z0-9]{3,8})/i,
-      /access code[：:\s]*([A-Za-z0-9]{3,8})/i,
-      /login code[：:\s]*([A-Za-z0-9]{3,8})/i,
-      /otp[：:\s]*([A-Za-z0-9]{3,8})/i,
-      /pin[：:\s]*([A-Za-z0-9]{3,8})/i,
-      /code[：:\s]*([A-Za-z0-9]{3,8})/i,
-      
-      // 🌐 通用模式 - 括号、引号包围
-      /【([A-Za-z0-9]{3,8})】/i,
-      /\[([A-Za-z0-9]{3,8})\]/i,
-      /\(([A-Za-z0-9]{3,8})\)/i,
-      /"([A-Za-z0-9]{3,8})"/i,
-      /'([A-Za-z0-9]{3,8})'/i,
-      /`([A-Za-z0-9]{3,8})`/i,
-      
-      // 🔢 纯数字模式（国内常见）
-      /(\d{4,8})(?=\D|$)/,
-      
-      // 🔤 字母数字组合模式（国外常见）
-      /\b([A-Z0-9]{4,8})\b/,
-      /\b([a-z0-9]{4,8})\b/i,
-      /\b([A-Za-z]{4,6})\b/,
-      
-      // 🏢 特定服务商模式
-      /your code is[：:\s]*([A-Za-z0-9]{3,8})/i,
-      /use code[：:\s]*([A-Za-z0-9]{3,8})/i,
-      /enter[：:\s]*([A-Za-z0-9]{3,8})/i,
-      /confirm with[：:\s]*([A-Za-z0-9]{3,8})/i,
-      
-      // 🌏 多语言模式
-      /código[：:\s]*([A-Za-z0-9]{3,8})/i, // 西班牙语
-      /code de vérification[：:\s]*([A-Za-z0-9]{3,8})/i, // 法语
-      /bestätigungscode[：:\s]*([A-Za-z0-9]{3,8})/i, // 德语
-      /認証コード[：:\s]*([A-Za-z0-9]{3,8})/i, // 日语
-      /인증번호[：:\s]*([A-Za-z0-9]{3,8})/i, // 韩语
+      /验证码[：:\s]*(\d{4,8})/,
+      /verification code[：:\s]*(\d{4,8})/i,
+      /code[：:\s]*(\d{4,8})/i,
+      /(\d{4,8})[^0-9]*验证码/,
+      /【.*】.*?(\d{4,8})/,
+      /(?:验证码|code|密码)[^0-9]*(\d{4,8})/i
     ];
     
-    // 🎯 按优先级尝试匹配
     for (const pattern of patterns) {
       const match = content.match(pattern);
-      if (match && match[1]) {
-        const code = match[1].trim();
-        // 🔍 验证提取的代码是否合理
-        if (code.length >= 3 && code.length <= 8) {
-          console.log(`🎯 智能识别验证码成功: "${code}" (模式: ${pattern.source})`);
-          return code;
-        }
+      if (match) {
+        return match[1];
       }
     }
-    
-    console.log(`❌ 未能识别验证码，短信内容: "${content}"`);
     return null;
-  };
-
-  // 🔥 新增：智能验证码检测函数
-  const isValidVerificationCode = (code: string): boolean => {
-    if (!code || code.length < 3 || code.length > 8) return false;
-    
-    // 🎯 验证码格式检测规则
-    const validPatterns = [
-      /^\d{4,8}$/,           // 纯数字：1234, 123456
-      /^[A-Z0-9]{4,8}$/,     // 大写字母+数字：A1B2, XYZ123
-      /^[a-z0-9]{4,8}$/,     // 小写字母+数字：a1b2, xyz123
-      /^[A-Za-z0-9]{4,8}$/,  // 混合字母数字：Ab12, XyZ123
-      /^[A-Z]{4,6}$/,        // 纯大写字母：ABCD, XYZABC
-      /^[a-z]{4,6}$/,        // 纯小写字母：abcd, xyzabc
-      /^[A-Za-z]{4,6}$/,     // 混合字母：AbCd, XyZaBc
-    ];
-    
-    return validPatterns.some(pattern => pattern.test(code));
   };
 
   // 复制到剪贴板
@@ -855,12 +690,6 @@ const CustomerPage: React.FC = () => {
                 } : null);
 
                 // 🔥 关键修复：检查访问次数是否达到上限，如果达到则跳转到访问受限页面
-                console.log('🔍 检查访问次数限制:', {
-                  current: updatedLinkData.access_count,
-                  max: updatedLinkData.max_access_count,
-                  isLimitReached: updatedLinkData.access_count >= updatedLinkData.max_access_count
-                });
-
                 if (updatedLinkData.access_count >= updatedLinkData.max_access_count) {
                   console.log('🚫 访问次数已达上限，立即跳转到访问受限页面');
                   
@@ -874,38 +703,7 @@ const CustomerPage: React.FC = () => {
                     clearInterval(accessCountdownRef.current);
                   }
                   
-                  // 显示跳转提示
-                  message.warning({
-                    content: '访问次数已达上限！页面正在跳转到访问受限状态。',
-                    duration: 3,
-                    style: {
-                      marginTop: '20vh',
-                    },
-                  });
-                  
-                  // 强制重新渲染
-                  setTimeout(() => {
-                    console.log('🔄 强制重新渲染页面状态');
-                    setLoading(false); // 确保不在加载状态
-                  }, 100);
-                  
                   return; // 停止后续处理
-                }
-
-                // 🔥 友好提示：根据新的访问次数提醒用户
-                const newPercent = Math.round((updatedLinkData.access_count / updatedLinkData.max_access_count) * 100);
-                
-                if (newPercent >= 80) {
-                  const remaining = updatedLinkData.max_access_count - updatedLinkData.access_count;
-                  message.info({
-                    content: `访问次数已增加！还剩 ${remaining} 次访问机会。`,
-                    duration: 5,
-                  });
-                } else {
-                  message.success({
-                    content: `访问次数已增加至 ${updatedLinkData.access_count}/${updatedLinkData.max_access_count}`,
-                    duration: 3,
-                  });
                 }
 
                 // 重新计算下一次倒计时
@@ -1025,45 +823,18 @@ const CustomerPage: React.FC = () => {
       <div className="customer-container" style={{ 
         minHeight: '100vh', 
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        padding: '20px',
-        position: 'relative'
+        padding: '20px'
       }}>
-        {/* 美化背景装饰 */}
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: `
-            radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
-            radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
-            radial-gradient(circle at 40% 40%, rgba(120, 119, 198, 0.2) 0%, transparent 50%)
-          `,
-          pointerEvents: 'none',
-          zIndex: 0
-        }} />
-        
-        <div style={{ maxWidth: 800, margin: '0 auto', position: 'relative', zIndex: 1 }}>
+        <div style={{ maxWidth: 800, margin: '0 auto' }}>
           {/* 账号信息卡片 */}
           <Card 
             className="customer-card"
             style={{ 
               marginBottom: 24,
-              borderRadius: 16,
-              boxShadow: '0 12px 40px rgba(0,0,0,0.15)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              background: 'rgba(255,255,255,0.95)',
-              backdropFilter: 'blur(10px)',
-              overflow: 'hidden'
+              borderRadius: 12,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
             }}
           >
-            {/* 卡片顶部装饰条 */}
-            <div style={{
-              height: '4px',
-              background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
-              margin: '-24px -24px 20px -24px'
-            }} />
             <Row gutter={[24, 24]} align="middle">
               <Col xs={24} sm={8} style={{ textAlign: 'center' }}>
                 <Avatar
@@ -1142,14 +913,8 @@ const CustomerPage: React.FC = () => {
           <Card
             title={
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ 
-                  display: 'flex', 
-                  alignItems: 'center',
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  color: '#1890ff'
-                }}>
-                  <MobileOutlined style={{ marginRight: 8, fontSize: '18px' }} />
+                <span>
+                  <MobileOutlined style={{ marginRight: 8 }} />
                   验证码信息
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1169,12 +934,7 @@ const CustomerPage: React.FC = () => {
                     }
                     loading={loading}
                     style={{
-                      borderRadius: '8px',
-                      background: progressiveRetrievalState.isActive ? '#faad14' : 
-                                 (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count) ? '#ff4d4f' : '#1890ff',
-                      borderColor: 'transparent',
-                      boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
-                      fontWeight: '600'
+                      opacity: (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count) ? 0.5 : 1
                     }}
                   >
                     {progressiveRetrievalState.isActive 
@@ -1188,20 +948,10 @@ const CustomerPage: React.FC = () => {
               </div>
             }
             style={{ 
-              borderRadius: 16,
-              boxShadow: '0 12px 40px rgba(0,0,0,0.15)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              background: 'rgba(255,255,255,0.95)',
-              backdropFilter: 'blur(10px)',
-              overflow: 'hidden'
+              borderRadius: 12,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
             }}
           >
-            {/* 卡片顶部装饰条 */}
-            <div style={{
-              height: '4px',
-              background: 'linear-gradient(90deg, #52c41a 0%, #1890ff 100%)',
-              margin: '-24px -24px 20px -24px'
-            }} />
             {/* 🔥 渐进式获取状态显示 - 显示每条短信的独立倒计时 */}
             {progressiveRetrievalState.isActive && (
               <div style={{ 
@@ -1396,7 +1146,7 @@ const CustomerPage: React.FC = () => {
                             </div>
                           )}
 
-                          {/* 🔥 智能复制按钮组 - 根据验证码识别结果显示不同按钮 */}
+                          {/* 复制按钮组 */}
                           <div style={{ 
                             display: 'flex', 
                             gap: 8, 
@@ -1404,223 +1154,27 @@ const CustomerPage: React.FC = () => {
                             paddingTop: 8,
                             borderTop: '1px solid #f0f0f0'
                           }}>
-                            {/* 🎯 智能按钮逻辑：检查是否识别出有效验证码 */}
-                            {(() => {
-                              const hasValidCode = isValidVerificationCode(extractedCode);
-                              
-                              if (hasValidCode && fullContent) {
-                                // 识别出了验证码，显示两个按钮
-                                return (
-                                  <>
-                                    <Button
-                                      type="default"
-                                      icon={<CopyOutlined />}
-                                      size="small"
-                                      onClick={() => copyToClipboard(fullContent, '短信全文')}
-                                      disabled={sms.is_used}
-                                    >
-                                      复制全文
-                                    </Button>
-                                    <Button
-                                      type="primary"
-                                      ghost
-                                      icon={<CopyOutlined />}
-                                      size="small"
-                                      onClick={() => copyToClipboard(extractedCode, '验证码')}
-                                      disabled={sms.is_used}
-                                      style={{
-                                        background: 'rgba(24, 144, 255, 0.1)',
-                                        borderColor: '#1890ff'
-                                      }}
-                                    >
-                                      复制验证码
-                                    </Button>
-                                  </>
-                                );
-                              } else {
-                                // 没有识别出验证码，只显示复制全文
-                                return (
-                                  <Button
-                                    type="default"
-                                    icon={<CopyOutlined />}
-                                    size="small"
-                                    onClick={() => copyToClipboard(fullContent, '短信全文')}
-                                    disabled={sms.is_used}
-                                  >
-                                    复制全文
-                                  </Button>
-                                );
-                              }
-                            })()}
-                          </div>
-                        </Space>
-                      </Card>
-                    );
-                  })}
-              </Space>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                <MobileOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
-                <Title level={4} type="secondary">暂无验证码</Title>
-                <Paragraph type="secondary">
-                  点击"获取验证码"按钮开始获取短信验证码
-                </Paragraph>
-              </div>
-            )}
-=======
-            {/* 短信列表 - 显示完整短信内容 */}
-            {accountInfo.verification_codes && accountInfo.verification_codes.length > 0 ? (
-              <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                {accountInfo.verification_codes
-                  .sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime())
-                  .map((sms) => {
-                    const freshness = getCodeFreshness(sms.received_at);
-                    // 显示完整短信内容，如果没有full_content则显示code
-                    const fullContent = sms.full_content || sms.code;
-                    const extractedCode = sms.code;
-                    
-                    return (
-                      <Card
-                        key={sms.id}
-                        size="small"
-                        style={{
-                          background: sms.is_used ? '#f5f5f5' : '#fff',
-                          border: `2px solid ${sms.is_used ? '#d9d9d9' : '#1890ff'}`,
-                          borderRadius: 12,
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                        }}
-                      >
-                        <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                          {/* 短信头部信息 */}
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                              {sms.progressive_index && (
-                                <Tag color="blue" size="small">
-                                  第{sms.progressive_index}条
-                                </Tag>
-                              )}
-                              {sms.is_used && (
-                                <Tag color="default" size="small">已使用</Tag>
-                              )}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <ClockCircleOutlined style={{ color: freshness.color }} />
-                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                  {formatTime(sms.received_at)}
-                                </Text>
-                                <Tag color={freshness.color} size="small">
-                                  {freshness.text}
-                                </Tag>
-                              </div>
-                            </div>
-                            {sms.sender && (
-                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                来自: {sms.sender}
-                              </Text>
+                            <Button
+                              type="default"
+                              icon={<CopyOutlined />}
+                              size="small"
+                              onClick={() => copyToClipboard(fullContent, '短信全文')}
+                              disabled={sms.is_used}
+                            >
+                              复制全文
+                            </Button>
+                            {extractedCode && extractedCode !== fullContent && (
+                              <Button
+                                type="primary"
+                                ghost
+                                icon={<CopyOutlined />}
+                                size="small"
+                                onClick={() => copyToClipboard(extractedCode, '验证码')}
+                                disabled={sms.is_used}
+                              >
+                                复制验证码
+                              </Button>
                             )}
-                          </div>
-
-                          {/* 完整短信内容 */}
-                          <div style={{
-                            padding: '12px 16px',
-                            background: '#f8f9fa',
-                            borderRadius: 8,
-                            border: '1px solid #e9ecef',
-                            lineHeight: '1.6'
-                          }}>
-                            <Text style={{ 
-                              fontSize: 14,
-                              color: '#333',
-                              wordBreak: 'break-word',
-                              whiteSpace: 'pre-wrap'
-                            }}>
-                              {fullContent}
-                            </Text>
-                          </div>
-
-                          {/* 提取的验证码（如果有） */}
-                          {extractedCode && extractedCode !== fullContent && (
-                            <div style={{
-                              padding: '8px 12px',
-                              background: '#e6f7ff',
-                              borderRadius: 6,
-                              border: '1px solid #91d5ff',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between'
-                            }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <Text type="secondary" style={{ fontSize: 12 }}>识别的验证码:</Text>
-                                <Text
-                                  strong
-                                  style={{
-                                    fontSize: 16,
-                                    fontFamily: 'monospace',
-                                    color: '#1890ff',
-                                    letterSpacing: '1px'
-                                  }}
-                                >
-                                  {extractedCode}
-                                </Text>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* 🔥 智能复制按钮组 - 根据验证码识别结果显示不同按钮 */}
-                          <div style={{ 
-                            display: 'flex', 
-                            gap: 8, 
-                            justifyContent: 'flex-end',
-                            paddingTop: 8,
-                            borderTop: '1px solid #f0f0f0'
-                          }}>
-                            {/* 🎯 智能按钮逻辑：检查是否识别出有效验证码 */}
-                            {(() => {
-                              const hasValidCode = isValidVerificationCode(extractedCode);
-                              
-                              if (hasValidCode && fullContent) {
-                                // 识别出了验证码，显示两个按钮
-                                return (
-                                  <>
-                                    <Button
-                                      type="default"
-                                      icon={<CopyOutlined />}
-                                      size="small"
-                                      onClick={() => copyToClipboard(fullContent, '短信全文')}
-                                      disabled={sms.is_used}
-                                    >
-                                      复制全文
-                                    </Button>
-                                    <Button
-                                      type="primary"
-                                      ghost
-                                      icon={<CopyOutlined />}
-                                      size="small"
-                                      onClick={() => copyToClipboard(extractedCode, '验证码')}
-                                      disabled={sms.is_used}
-                                      style={{
-                                        background: 'rgba(24, 144, 255, 0.1)',
-                                        borderColor: '#1890ff'
-                                      }}
-                                    >
-                                      复制验证码
-                                    </Button>
-                                  </>
-                                );
-                              } else {
-                                // 没有识别出验证码，只显示复制全文
-                                return (
-                                  <Button
-                                    type="default"
-                                    icon={<CopyOutlined />}
-                                    size="small"
-                                    onClick={() => copyToClipboard(fullContent, '短信全文')}
-                                    disabled={sms.is_used}
-                                  >
-                                    复制全文
-                                  </Button>
-                                );
-                              }
-                            })()}
                           </div>
                         </Space>
                       </Card>
@@ -1648,25 +1202,11 @@ const CustomerPage: React.FC = () => {
               </Space>
             ) : (
               <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                {/* 🔥 验证码次数达到上限时的提示 - 在空状态中显示 */}
-                {linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && 
-                 linkInfo.verification_count >= linkInfo.max_verification_count ? (
-                  <div>
-                    <ExclamationCircleOutlined style={{ fontSize: 48, color: '#faad14', marginBottom: 16 }} />
-                    <Title level={4} style={{ color: '#faad14' }}>验证码获取次数已达上限</Title>
-                    <Paragraph type="secondary">
-                      您已达到验证码获取次数的上限，无法继续获取新的验证码。如需继续使用，请联系管理员。
-                    </Paragraph>
-                  </div>
-                ) : (
-                  <div>
-                    <MobileOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
-                    <Title level={4} type="secondary">暂无验证码</Title>
-                    <Paragraph type="secondary">
-                      点击"获取验证码"按钮开始获取短信验证码
-                    </Paragraph>
-                  </div>
-                )}
+                <MobileOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
+                <Title level={4} type="secondary">暂无验证码</Title>
+                <Paragraph type="secondary">
+                  点击"获取验证码"按钮开始获取短信验证码
+                </Paragraph>
               </div>
             )}
           </Card>
@@ -1674,23 +1214,20 @@ const CustomerPage: React.FC = () => {
           {/* 使用统计和限制信息 */}
           {linkInfo && (
             <Card
+              title={
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ClockCircleOutlined style={{ color: '#1890ff' }} />
+                  <Text strong style={{ color: '#1890ff' }}>使用限制信息</Text>
+                </div>
+              }
               size="small"
               style={{ 
-                marginTop: 20,
-                borderRadius: 16,
+                marginTop: 16,
+                borderRadius: 12,
                 background: 'rgba(255,255,255,0.95)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                overflow: 'hidden'
+                boxShadow: '0 4px 16px rgba(0,0,0,0.1)'
               }}
             >
-              {/* 统计卡片装饰条 */}
-              <div style={{
-                height: '3px',
-                background: 'linear-gradient(90deg, #faad14 0%, #1890ff 50%, #52c41a 100%)',
-                margin: '-16px -16px 16px -16px'
-              }} />
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 {/* 访问次数统计 */}
                 <div>
