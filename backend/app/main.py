@@ -132,7 +132,7 @@ try:
     app.include_router(settings_api.router, prefix="/api/settings", tags=["系统设置"])
     app.include_router(websocket_routes.router, prefix="/api", tags=["WebSocket通信"])
     app.include_router(customer.router, prefix="/api", tags=["客户端访问"])
-    app.include_router(images.router, prefix="/api", tags=["图片访问"])
+    app.include_router(images.router, prefix="/api", tags=["图片管理"])
     app.include_router(android_client.router, prefix="/api/android", tags=["Android客户端"])
     logger.info("✅ 所有API路由注册完成")
 except Exception as e:
