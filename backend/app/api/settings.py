@@ -346,28 +346,6 @@ async def get_customer_site_settings(
             detail="获取客户端页面设置失败"
         )
 
-@router.get("/customer-site/public", response_model=dict)
-async def get_customer_site_settings_public(db: Session = Depends(get_db)):
-    """
-    获取客户端页面设置（公开接口，无需认证）
-    Get customer site settings (public, no authentication required)
-    """
-    try:
-        customer_settings = SettingsService.get_customer_site_settings(db)
-        
-        return {
-            "success": True,
-            "message": "获取客户端页面设置成功",
-            "data": customer_settings
-        }
-        
-    except Exception as e:
-        logger.error(f"获取客户端页面设置失败: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="获取客户端页面设置失败"
-        )
-
 class CustomerSiteSettingsModel(BaseModel):
     """客户端页面设置模型"""
     customerSiteTitle: str = Field(description="客户端页面标题")
@@ -414,3 +392,41 @@ async def update_customer_site_settings(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="更新客户端页面设置失败"
         )
+
+@router.get("/customer-site/public", response_model=dict)
+async def get_customer_site_settings_public_new(db: Session = Depends(get_db)):
+    """
+    获取客户端页面设置（公开API，无需认证）
+    Get customer site settings (public API, no authentication required)
+    """
+    try:
+        logger.info("公开API获取客户端页面设置")
+        
+        # 从数据库获取客户端设置
+        customer_settings = SettingsService.get_customer_site_settings(db)
+        
+        return {
+            "success": True,
+            "message": "获取客户端页面设置成功",
+            "data": customer_settings
+        }
+        
+    except Exception as e:
+        logger.error(f"公开API获取客户端页面设置失败: {str(e)}")
+        # 返回默认设置而不是错误，确保客户端始终能正常工作
+        default_settings = {
+            "customerSiteTitle": "验证码获取服务",
+            "customerSiteDescription": "安全便捷的验证码获取服务",
+            "customerSiteWelcomeText": "<h2>欢迎使用验证码获取服务</h2><p>请按照以下步骤获取您的验证码：</p><ol><li>复制用户名和密码</li><li>点击获取验证码按钮</li><li>等待验证码到达</li></ol>",
+            "customerSiteFooterText": "<p>如有问题，请联系客服。</p>",
+            "customerSiteBackgroundColor": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            "customerSiteLogoUrl": None,
+            "customerSiteCustomCSS": "",
+            "enableCustomerSiteCustomization": True
+        }
+        
+        return {
+            "success": True,
+            "message": "使用默认客户端页面设置",
+            "data": default_settings
+        }
