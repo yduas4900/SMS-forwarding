@@ -1419,6 +1419,208 @@ const CustomerPage: React.FC = () => {
                 </Paragraph>
               </div>
             )}
+=======
+            {/* 短信列表 - 显示完整短信内容 */}
+            {accountInfo.verification_codes && accountInfo.verification_codes.length > 0 ? (
+              <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                {accountInfo.verification_codes
+                  .sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime())
+                  .map((sms) => {
+                    const freshness = getCodeFreshness(sms.received_at);
+                    // 显示完整短信内容，如果没有full_content则显示code
+                    const fullContent = sms.full_content || sms.code;
+                    const extractedCode = sms.code;
+                    
+                    return (
+                      <Card
+                        key={sms.id}
+                        size="small"
+                        style={{
+                          background: sms.is_used ? '#f5f5f5' : '#fff',
+                          border: `2px solid ${sms.is_used ? '#d9d9d9' : '#1890ff'}`,
+                          borderRadius: 12,
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                        }}
+                      >
+                        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                          {/* 短信头部信息 */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              {sms.progressive_index && (
+                                <Tag color="blue" size="small">
+                                  第{sms.progressive_index}条
+                                </Tag>
+                              )}
+                              {sms.is_used && (
+                                <Tag color="default" size="small">已使用</Tag>
+                              )}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <ClockCircleOutlined style={{ color: freshness.color }} />
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                  {formatTime(sms.received_at)}
+                                </Text>
+                                <Tag color={freshness.color} size="small">
+                                  {freshness.text}
+                                </Tag>
+                              </div>
+                            </div>
+                            {sms.sender && (
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                来自: {sms.sender}
+                              </Text>
+                            )}
+                          </div>
+
+                          {/* 完整短信内容 */}
+                          <div style={{
+                            padding: '12px 16px',
+                            background: '#f8f9fa',
+                            borderRadius: 8,
+                            border: '1px solid #e9ecef',
+                            lineHeight: '1.6'
+                          }}>
+                            <Text style={{ 
+                              fontSize: 14,
+                              color: '#333',
+                              wordBreak: 'break-word',
+                              whiteSpace: 'pre-wrap'
+                            }}>
+                              {fullContent}
+                            </Text>
+                          </div>
+
+                          {/* 提取的验证码（如果有） */}
+                          {extractedCode && extractedCode !== fullContent && (
+                            <div style={{
+                              padding: '8px 12px',
+                              background: '#e6f7ff',
+                              borderRadius: 6,
+                              border: '1px solid #91d5ff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between'
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Text type="secondary" style={{ fontSize: 12 }}>识别的验证码:</Text>
+                                <Text
+                                  strong
+                                  style={{
+                                    fontSize: 16,
+                                    fontFamily: 'monospace',
+                                    color: '#1890ff',
+                                    letterSpacing: '1px'
+                                  }}
+                                >
+                                  {extractedCode}
+                                </Text>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 🔥 智能复制按钮组 - 根据验证码识别结果显示不同按钮 */}
+                          <div style={{ 
+                            display: 'flex', 
+                            gap: 8, 
+                            justifyContent: 'flex-end',
+                            paddingTop: 8,
+                            borderTop: '1px solid #f0f0f0'
+                          }}>
+                            {/* 🎯 智能按钮逻辑：检查是否识别出有效验证码 */}
+                            {(() => {
+                              const hasValidCode = isValidVerificationCode(extractedCode);
+                              
+                              if (hasValidCode && fullContent) {
+                                // 识别出了验证码，显示两个按钮
+                                return (
+                                  <>
+                                    <Button
+                                      type="default"
+                                      icon={<CopyOutlined />}
+                                      size="small"
+                                      onClick={() => copyToClipboard(fullContent, '短信全文')}
+                                      disabled={sms.is_used}
+                                    >
+                                      复制全文
+                                    </Button>
+                                    <Button
+                                      type="primary"
+                                      ghost
+                                      icon={<CopyOutlined />}
+                                      size="small"
+                                      onClick={() => copyToClipboard(extractedCode, '验证码')}
+                                      disabled={sms.is_used}
+                                      style={{
+                                        background: 'rgba(24, 144, 255, 0.1)',
+                                        borderColor: '#1890ff'
+                                      }}
+                                    >
+                                      复制验证码
+                                    </Button>
+                                  </>
+                                );
+                              } else {
+                                // 没有识别出验证码，只显示复制全文
+                                return (
+                                  <Button
+                                    type="default"
+                                    icon={<CopyOutlined />}
+                                    size="small"
+                                    onClick={() => copyToClipboard(fullContent, '短信全文')}
+                                    disabled={sms.is_used}
+                                  >
+                                    复制全文
+                                  </Button>
+                                );
+                              }
+                            })()}
+                          </div>
+                        </Space>
+                      </Card>
+                    );
+                  })}
+
+                {/* 🔥 验证码获取次数已达上限提示 - 移到短信列表下方 */}
+                {linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count && (
+                  <Alert
+                    message="🚫 验证码获取次数已达上限"
+                    description={
+                      <div>
+                        <p style={{ margin: 0, marginBottom: 8 }}>您已达到最大验证码获取次数限制。</p>
+                        <p style={{ margin: 0, color: '#1890ff', fontWeight: 'bold' }}>
+                          📞 如需继续使用，请联系管理员重置次数限制
+                        </p>
+                      </div>
+                    }
+                    type="error"
+                    size="small"
+                    style={{ marginTop: 16 }}
+                    showIcon
+                  />
+                )}
+              </Space>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                {/* 🔥 验证码次数达到上限时的提示 - 在空状态中显示 */}
+                {linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && 
+                 linkInfo.verification_count >= linkInfo.max_verification_count ? (
+                  <div>
+                    <ExclamationCircleOutlined style={{ fontSize: 48, color: '#faad14', marginBottom: 16 }} />
+                    <Title level={4} style={{ color: '#faad14' }}>验证码获取次数已达上限</Title>
+                    <Paragraph type="secondary">
+                      您已达到验证码获取次数的上限，无法继续获取新的验证码。如需继续使用，请联系管理员。
+                    </Paragraph>
+                  </div>
+                ) : (
+                  <div>
+                    <MobileOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
+                    <Title level={4} type="secondary">暂无验证码</Title>
+                    <Paragraph type="secondary">
+                      点击"获取验证码"按钮开始获取短信验证码
+                    </Paragraph>
+                  </div>
+                )}
+              </div>
+            )}
           </Card>
 
           {/* 使用统计和限制信息 */}
@@ -1534,23 +1736,6 @@ const CustomerPage: React.FC = () => {
                     }
                     trailColor="#f0f0f0"
                   />
-                  {(linkInfo.verification_count || 0) >= linkInfo.max_verification_count && (
-                    <Alert
-                      message="🚫 验证码获取次数已达上限"
-                      description={
-                        <div>
-                          <p style={{ margin: 0, marginBottom: 8 }}>您已达到最大验证码获取次数限制。</p>
-                          <p style={{ margin: 0, color: '#1890ff', fontWeight: 'bold' }}>
-                            📞 如需继续使用，请联系管理员重置次数限制
-                          </p>
-                        </div>
-                      }
-                      type="error"
-                      size="small"
-                      style={{ marginTop: 8 }}
-                      showIcon
-                    />
-                  )}
                 </div>
 
                 {/* 验证码等待时间配置 */}
