@@ -411,18 +411,24 @@ const LinkManagement: React.FC = () => {
       key: 'access_stats',
       width: 120,
       render: (record: Link) => {
-        const rate = getUsageRate(record.access_count, record.max_access_count);
+        const accessCount = record.access_count || 0;
+        const maxAccessCount = record.max_access_count || 0;
+        const rate = getUsageRate(accessCount, maxAccessCount);
         return (
           <div>
             <div style={{ marginBottom: 4 }}>
-              <Text strong>{record.access_count}</Text>
-              <Text type="secondary"> / {record.max_access_count}</Text>
+              <Text strong>{accessCount}</Text>
+              <Text type="secondary"> / {maxAccessCount}</Text>
             </div>
             <Progress 
               percent={rate} 
               size="small" 
               strokeColor={rate >= 80 ? '#ff4d4f' : '#1890ff'}
+              showInfo={false}
             />
+            <div style={{ fontSize: '11px', color: '#666', textAlign: 'center' }}>
+              {rate}%
+            </div>
           </div>
         );
       },
@@ -432,18 +438,24 @@ const LinkManagement: React.FC = () => {
       key: 'verification_stats',
       width: 120,
       render: (record: Link) => {
-        const rate = getUsageRate(record.verification_count, record.max_verification_count);
+        const verificationCount = record.verification_count || 0;
+        const maxVerificationCount = record.max_verification_count || 0;
+        const rate = getUsageRate(verificationCount, maxVerificationCount);
         return (
           <div>
             <div style={{ marginBottom: 4 }}>
-              <Text strong>{record.verification_count}</Text>
-              <Text type="secondary"> / {record.max_verification_count}</Text>
+              <Text strong>{verificationCount}</Text>
+              <Text type="secondary"> / {maxVerificationCount}</Text>
             </div>
             <Progress 
               percent={rate} 
               size="small" 
               strokeColor={rate >= 80 ? '#ff4d4f' : '#52c41a'}
+              showInfo={false}
             />
+            <div style={{ fontSize: '11px', color: '#666', textAlign: 'center' }}>
+              {rate}%
+            </div>
           </div>
         );
       },
