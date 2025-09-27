@@ -1342,7 +1342,7 @@ const CustomerPage: React.FC = () => {
                               </Col>
                             </Row>
 
-                            {/* 🔥 强制显示完整短信内容区域 - 总是显示，不管是否有full_content */}
+                            {/* 🔥 完整短信内容显示区域 - 智能显示复制按钮 */}
                             <div style={{
                               padding: '12px',
                               backgroundColor: 'rgba(240, 249, 255, 0.6)',
@@ -1350,34 +1350,67 @@ const CustomerPage: React.FC = () => {
                               border: '1px solid rgba(186, 230, 253, 0.8)',
                               position: 'relative'
                             }}>
+                              {/* 根据是否识别出验证码显示不同的复制按钮 */}
                               <div style={{ 
                                 display: 'flex', 
-                                justifyContent: 'space-between', 
+                                justifyContent: 'flex-end', 
                                 alignItems: 'flex-start',
                                 marginBottom: '8px'
                               }}>
-                                <Text style={{ 
-                                  fontSize: 12, 
-                                  color: '#0369a1', 
-                                  fontWeight: '600'
-                                }}>
-                                  完整短信内容
-                                </Text>
-                                <Button
-                                  type="text"
-                                  size="small"
-                                  icon={<CopyOutlined />}
-                                  onClick={() => copyToClipboard(code.full_content || code.code || '', '短信全文')}
-                                  style={{
-                                    fontSize: '11px',
-                                    height: '24px',
-                                    padding: '0 8px',
-                                    borderRadius: '6px',
-                                    color: '#0369a1'
-                                  }}
-                                >
-                                  复制全文
-                                </Button>
+                                {/* 🔥 智能按钮逻辑：识别出验证码显示两个按钮，否则只显示复制全文 */}
+                                {code.full_content && code.full_content !== code.code ? (
+                                  // 识别出了验证码，显示两个按钮
+                                  <Space size="small">
+                                    <Button
+                                      type="text"
+                                      size="small"
+                                      icon={<CopyOutlined />}
+                                      onClick={() => copyToClipboard(code.code, '验证码')}
+                                      style={{
+                                        fontSize: '11px',
+                                        height: '24px',
+                                        padding: '0 8px',
+                                        borderRadius: '6px',
+                                        color: '#1890ff',
+                                        background: 'rgba(24, 144, 255, 0.1)'
+                                      }}
+                                    >
+                                      复制验证码
+                                    </Button>
+                                    <Button
+                                      type="text"
+                                      size="small"
+                                      icon={<CopyOutlined />}
+                                      onClick={() => copyToClipboard(code.full_content || '', '短信全文')}
+                                      style={{
+                                        fontSize: '11px',
+                                        height: '24px',
+                                        padding: '0 8px',
+                                        borderRadius: '6px',
+                                        color: '#0369a1'
+                                      }}
+                                    >
+                                      复制全文
+                                    </Button>
+                                  </Space>
+                                ) : (
+                                  // 没有识别出验证码，只显示复制全文
+                                  <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<CopyOutlined />}
+                                    onClick={() => copyToClipboard(code.full_content || code.code || '', '短信全文')}
+                                    style={{
+                                      fontSize: '11px',
+                                      height: '24px',
+                                      padding: '0 8px',
+                                      borderRadius: '6px',
+                                      color: '#0369a1'
+                                    }}
+                                  >
+                                    复制全文
+                                  </Button>
+                                )}
                               </div>
                               <Text style={{ 
                                 fontSize: 13, 
@@ -1404,7 +1437,6 @@ const CustomerPage: React.FC = () => {
                                   </Text>
                                 </div>
                               )}
-                              
                             </div>
 
                             {/* 时间信息 */}
