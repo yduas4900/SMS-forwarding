@@ -1342,71 +1342,72 @@ const CustomerPage: React.FC = () => {
                               </Col>
                             </Row>
 
-                            {/* 完整短信内容显示区域 */}
-                            {code.full_content && (
-                              <div style={{
-                                padding: '12px',
-                                backgroundColor: 'rgba(240, 249, 255, 0.6)',
-                                borderRadius: '8px',
-                                border: '1px solid rgba(186, 230, 253, 0.8)',
-                                position: 'relative'
+                            {/* 🔥 强制显示完整短信内容区域 - 总是显示，不管是否有full_content */}
+                            <div style={{
+                              padding: '12px',
+                              backgroundColor: 'rgba(240, 249, 255, 0.6)',
+                              borderRadius: '8px',
+                              border: '1px solid rgba(186, 230, 253, 0.8)',
+                              position: 'relative'
+                            }}>
+                              <div style={{ 
+                                display: 'flex', 
+                                justifyContent: 'space-between', 
+                                alignItems: 'flex-start',
+                                marginBottom: '8px'
                               }}>
+                                <Text style={{ 
+                                  fontSize: 12, 
+                                  color: '#0369a1', 
+                                  fontWeight: '600'
+                                }}>
+                                  完整短信内容
+                                </Text>
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  icon={<CopyOutlined />}
+                                  onClick={() => copyToClipboard(code.full_content || code.code || '', '短信全文')}
+                                  style={{
+                                    fontSize: '11px',
+                                    height: '24px',
+                                    padding: '0 8px',
+                                    borderRadius: '6px',
+                                    color: '#0369a1'
+                                  }}
+                                >
+                                  复制全文
+                                </Button>
+                              </div>
+                              <Text style={{ 
+                                fontSize: 13, 
+                                color: '#1e40af',
+                                lineHeight: '1.5',
+                                display: 'block',
+                                wordBreak: 'break-all',
+                                whiteSpace: 'pre-wrap'
+                              }}>
+                                {code.full_content || code.code || '短信内容获取中...'}
+                              </Text>
+                              {code.sender && (
                                 <div style={{ 
-                                  display: 'flex', 
-                                  justifyContent: 'space-between', 
-                                  alignItems: 'flex-start',
-                                  marginBottom: '8px'
+                                  marginTop: '8px',
+                                  paddingTop: '8px',
+                                  borderTop: '1px solid rgba(186, 230, 253, 0.5)'
                                 }}>
                                   <Text style={{ 
-                                    fontSize: 12, 
-                                    color: '#0369a1', 
-                                    fontWeight: '600'
+                                    fontSize: 11, 
+                                    color: '#64748b',
+                                    fontWeight: '500'
                                   }}>
-                                    完整短信内容
+                                    发送方: {code.sender}
                                   </Text>
-                                  <Button
-                                    type="text"
-                                    size="small"
-                                    icon={<CopyOutlined />}
-                                    onClick={() => copyToClipboard(code.full_content || '', '短信全文')}
-                                    style={{
-                                      fontSize: '11px',
-                                      height: '24px',
-                                      padding: '0 8px',
-                                      borderRadius: '6px',
-                                      color: '#0369a1'
-                                    }}
-                                  >
-                                    复制全文
-                                  </Button>
                                 </div>
-                                <Text style={{ 
-                                  fontSize: 13, 
-                                  color: '#1e40af',
-                                  lineHeight: '1.5',
-                                  display: 'block',
-                                  wordBreak: 'break-all',
-                                  whiteSpace: 'pre-wrap'
-                                }}>
-                                  {code.full_content}
-                                </Text>
-                                {code.sender && (
-                                  <div style={{ 
-                                    marginTop: '8px',
-                                    paddingTop: '8px',
-                                    borderTop: '1px solid rgba(186, 230, 253, 0.5)'
-                                  }}>
-                                    <Text style={{ 
-                                      fontSize: 11, 
-                                      color: '#64748b',
-                                      fontWeight: '500'
-                                    }}>
-                                      发送方: {code.sender}
-                                    </Text>
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                              )}
+                              
+                              {/* 🔥 调试信息 - 临时显示，帮助排查问题 */}
+                              <div style={{ 
+                                marginTop: '8px',
 
                             {/* 时间信息 */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
