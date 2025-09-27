@@ -222,6 +222,8 @@ const CustomerPage: React.FC = () => {
 
     try {
       console.log('🔄 获取已有短信，保留页面刷新前的验证码...');
+      console.log('🔗 API URL:', `${API_BASE_URL}/api/get_existing_sms?link_id=${currentLinkId}`);
+      
       const response = await fetch(`${API_BASE_URL}/api/get_existing_sms?link_id=${currentLinkId}`, {
         method: 'GET',
         headers: {
@@ -229,8 +231,10 @@ const CustomerPage: React.FC = () => {
         },
       });
 
+      console.log('📡 API响应状态:', response.status);
+
       if (!response.ok) {
-        console.warn('获取已有短信失败，继续正常流程');
+        console.warn('获取已有短信失败，继续正常流程，状态码:', response.status);
         return;
       }
 
@@ -252,13 +256,20 @@ const CustomerPage: React.FC = () => {
           };
         });
 
+        console.log('🔄 转换后的验证码数据:', existingCodes);
+
         // 更新账号信息，保留已有的验证码
-        setAccountInfo(prev => prev ? {
-          ...prev,
-          verification_codes: existingCodes
-        } : null);
+        setAccountInfo(prev => {
+          const updated = prev ? {
+            ...prev,
+            verification_codes: existingCodes
+          } : null;
+          console.log('📱 更新后的accountInfo:', updated);
+          return updated;
+        });
 
         console.log(`✅ 页面刷新保留了 ${existingCodes.length} 条已有验证码`);
+        message.success(`页面刷新保留了 ${existingCodes.length} 条已有验证码`);
       } else {
         console.log('📭 没有已有短信需要保留');
       }
