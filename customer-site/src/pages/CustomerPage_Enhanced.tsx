@@ -191,8 +191,24 @@ const CustomerPage: React.FC = () => {
         setError(null);
         setLastRefresh(new Date());
 
-        // 🔥 关键恢复：页面刷新时获取已有的短信，保留之前获取的验证码
-        await fetchExistingSms();
+        // 🔥 关键修复：只在页面刷新时保留短信，新打开页面时不保留
+        // 检测是否为页面刷新：通过检查performance.navigation.type
+        const isPageRefresh = performance.navigation && performance.navigation.type === 1;
+        const isBackForward = performance.navigation && performance.navigation.type === 2;
+        
+        console.log('🔍 页面加载类型检测:', {
+          navigationType: performance.navigation?.type,
+          isPageRefresh,
+          isBackForward,
+          userAgent: navigator.userAgent
+        });
+
+        if (isPageRefresh || isBackForward) {
+          console.log('🔄 检测到页面刷新或前进后退，保留已有短信');
+          await fetchExistingSms();
+        } else {
+          console.log('🆕 检测到新打开页面，不保留短信，从空白状态开始');
+        }
       } else {
         if (response.data.error === 'access_limit_exceeded') {
           setAccessDenied(true);
