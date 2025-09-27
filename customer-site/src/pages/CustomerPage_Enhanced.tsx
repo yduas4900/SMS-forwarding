@@ -148,7 +148,11 @@ const CustomerPage: React.FC = () => {
     };
   });
 
+  // 🔥 新增：访问会话间隔倒计时状态
+  const [accessSessionCountdown, setAccessSessionCountdown] = useState<number>(0);
+
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const accessCountdownRef = useRef<NodeJS.Timeout | null>(null);
 
   // 获取链接ID（从URL参数或查询参数）
   const currentLinkId = linkId || searchParams.get('link_id');
@@ -206,9 +210,71 @@ const CustomerPage: React.FC = () => {
         });
         
         setLinkInfo(linkData);
+        setLastRefresh(new Date());
+
+        // 🔥 关键修复：页面加载时立即检查访问次数是否已达上限
+        console.log('🔍 页面加载时检查访问次数限制:', {
+          current: linkData.access_count,
+          max: linkData.max_access_count,
+          isLimitReached: linkData.access_count >= linkData.max_access_count
+        });
+
+        // 🔥 新增：页面加载时也检查验证码次数限制
+        console.log('🔍 页面加载时检查验证码次数限制:', {
+          verificationCurrent: linkData.verification_count,
+          verificationMax: linkData.max_verification_count,
+          isVerificationLimitReached: linkData.verification_count !== undefined && linkData.max_verification_count !== undefined && linkData.verification_count >= linkData.max_verification_count
+        });
+
+        if (linkData.access_count >= linkData.max_access_count) {
+          console.log('🚫 页面加载时发现访问次数已达上限，立即跳转到访问受限页面');
+          setAccessDenied(true);
+          setError('此链接的访问次数已达上限，无法继续访问，请联系管理员。');
+          setLoading(false);
+          return; // 停止后续处理
+        }
+
+        // 如果没有达到上限，继续正常流程
         setAccessDenied(false);
         setError(null);
-        setLastRefresh(new Date());
+
+        // 🔥 新增：计算访问会话间隔倒计时
+        if (linkData.last_access_time && linkData.access_session_interval) {
+          const lastAccessTime = new Date(linkData.last_access_time);
+          const sessionIntervalMs = linkData.access_session_interval * 60 * 1000; // 分钟转毫秒
+          const elapsedTime = Date.now() - lastAccessTime.getTime();
+          const remainingTime = Math.max(0, sessionIntervalMs - elapsedTime);
+          const remainingSeconds = Math.ceil(remainingTime / 1000);
+          
+          console.log('⏰ 访问会话间隔倒计时计算:', {
+            lastAccessTime: linkData.last_access_time,
+            sessionInterval: linkData.access_session_interval,
+            elapsedMs: elapsedTime,
+            remainingMs: remainingTime,
+            remainingSeconds
+          });
+
+          setAccessSessionCountdown(remainingSeconds);
+        }
+
+        // 🔥 关键修复：只在页面刷新时保留短信，新打开页面时不保留
+        // 检测是否为页面刷新：通过检查performance.navigation.type
+        const isPageRefresh = performance.navigation && performance.navigation.type === 1;
+        const isBackForward = performance.navigation && performance.navigation.type === 2;
+        
+        console.log('🔍 页面加载类型检测:', {
+          navigationType: performance.navigation?.type,
+          isPageRefresh,
+          isBackForward,
+          userAgent: navigator.userAgent
+        });
+
+        if (isPageRefresh || isBackForward) {
+          console.log('🔄 检测到页面刷新或前进后退，保留已有短信');
+          await fetchExistingSms();
+        } else {
+          console.log('🆕 检测到新打开页面，不保留短信，从空白状态开始');
+        }
       } else {
         if (response.data.error === 'access_limit_exceeded') {
           setAccessDenied(true);
@@ -229,6 +295,69 @@ const CustomerPage: React.FC = () => {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 🔥 恢复功能：获取已有的短信（页面刷新时保留验证码）
+  const fetchExistingSms = async () => {
+    if (!currentLinkId) return;
+
+    try {
+      console.log('🔄 获取已有短信，保留页面刷新前的验证码...');
+      console.log('🔗 API URL:', `${API_BASE_URL}/api/get_existing_sms?link_id=${currentLinkId}`);
+      
+      const response = await fetch(`${API_BASE_URL}/api/get_existing_sms?link_id=${currentLinkId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('📡 API响应状态:', response.status);
+
+      if (!response.ok) {
+        console.warn('获取已有短信失败，继续正常流程，状态码:', response.status);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('📥 已有短信API响应:', data);
+
+      if (data.success && data.data?.all_matched_sms?.length > 0) {
+        // 将已有短信转换为验证码格式
+        const existingCodes: VerificationCode[] = data.data.all_matched_sms.map((sms: any, index: number) => {
+          const extractedCode = extractVerificationCode(sms.content);
+          return {
+            id: sms.id,
+            code: extractedCode || sms.content,
+            received_at: sms.sms_timestamp || new Date().toISOString(),
+            is_used: false,
+            full_content: sms.content,
+            sender: sms.sender,
+            progressive_index: index + 1
+          };
+        });
+
+        console.log('🔄 转换后的验证码数据:', existingCodes);
+
+        // 更新账号信息，保留已有的验证码
+        setAccountInfo(prev => {
+          const updated = prev ? {
+            ...prev,
+            verification_codes: existingCodes
+          } : null;
+          console.log('📱 更新后的accountInfo:', updated);
+          return updated;
+        });
+
+        console.log(`✅ 页面刷新保留了 ${existingCodes.length} 条已有验证码`);
+        message.success(`页面刷新保留了 ${existingCodes.length} 条已有验证码`);
+      } else {
+        console.log('📭 没有已有短信需要保留');
+      }
+    } catch (error) {
+      console.error('❌ 获取已有短信失败:', error);
+      // 不影响主流程，继续正常运行
     }
   };
 
@@ -695,6 +824,125 @@ const CustomerPage: React.FC = () => {
     }
   }, []);
 
+  // 🔥 新增：访问会话间隔倒计时效果
+  useEffect(() => {
+    if (accessSessionCountdown <= 0) return;
+
+    accessCountdownRef.current = setInterval(() => {
+      setAccessSessionCountdown(prev => {
+        const newCountdown = prev - 1;
+        
+        if (newCountdown <= 0) {
+          console.log('⏰ 访问会话间隔倒计时结束，访问次数即将增加');
+          
+          // 🔥 关键修复：倒计时结束时主动调用API更新访问次数
+          const updateAccessCount = async () => {
+            try {
+              console.log('🔄 倒计时结束，调用API更新访问次数...');
+              const response = await axios.get(`${API_BASE_URL}/api/get_account_info`, {
+                params: { link_id: currentLinkId }
+              });
+
+              if (response.data.success) {
+                const updatedLinkData = response.data.data.link_info;
+                console.log('📊 API返回更新后的访问次数:', updatedLinkData.access_count);
+                
+                // 实时更新linkInfo状态
+                setLinkInfo(prev => prev ? {
+                  ...prev,
+                  access_count: updatedLinkData.access_count,
+                  last_access_time: updatedLinkData.last_access_time
+                } : null);
+
+                // 🔥 关键修复：检查访问次数是否达到上限，如果达到则跳转到访问受限页面
+                console.log('🔍 检查访问次数限制:', {
+                  current: updatedLinkData.access_count,
+                  max: updatedLinkData.max_access_count,
+                  isLimitReached: updatedLinkData.access_count >= updatedLinkData.max_access_count
+                });
+
+                if (updatedLinkData.access_count >= updatedLinkData.max_access_count) {
+                  console.log('🚫 访问次数已达上限，立即跳转到访问受限页面');
+                  
+                  // 立即设置访问受限状态
+                  setAccessDenied(true);
+                  setError('此链接的访问次数已达上限，无法继续访问，请联系管理员。');
+                  
+                  // 清除倒计时
+                  setAccessSessionCountdown(0);
+                  if (accessCountdownRef.current) {
+                    clearInterval(accessCountdownRef.current);
+                  }
+                  
+                  // 显示跳转提示
+                  message.warning({
+                    content: '访问次数已达上限！页面正在跳转到访问受限状态。',
+                    duration: 3,
+                    style: {
+                      marginTop: '20vh',
+                    },
+                  });
+                  
+                  // 强制重新渲染
+                  setTimeout(() => {
+                    console.log('🔄 强制重新渲染页面状态');
+                    setLoading(false); // 确保不在加载状态
+                  }, 100);
+                  
+                  return; // 停止后续处理
+                }
+
+                // 🔥 友好提示：根据新的访问次数提醒用户
+                const newPercent = Math.round((updatedLinkData.access_count / updatedLinkData.max_access_count) * 100);
+                
+                if (newPercent >= 80) {
+                  const remaining = updatedLinkData.max_access_count - updatedLinkData.access_count;
+                  message.info({
+                    content: `访问次数已增加！还剩 ${remaining} 次访问机会。`,
+                    duration: 5,
+                  });
+                } else {
+                  message.success({
+                    content: `访问次数已增加至 ${updatedLinkData.access_count}/${updatedLinkData.max_access_count}`,
+                    duration: 3,
+                  });
+                }
+
+                // 重新计算下一次倒计时
+                if (updatedLinkData.last_access_time && updatedLinkData.access_session_interval) {
+                  const newLastAccessTime = new Date(updatedLinkData.last_access_time);
+                  const sessionIntervalMs = updatedLinkData.access_session_interval * 60 * 1000;
+                  const elapsedTime = Date.now() - newLastAccessTime.getTime();
+                  const remainingTime = Math.max(0, sessionIntervalMs - elapsedTime);
+                  const remainingSeconds = Math.ceil(remainingTime / 1000);
+                  
+                  console.log('⏰ 重新计算下一次访问会话倒计时:', remainingSeconds, '秒');
+                  setAccessSessionCountdown(remainingSeconds);
+                }
+              }
+            } catch (error) {
+              console.error('❌ 更新访问次数失败:', error);
+              message.error('更新访问次数失败，请刷新页面查看最新状态');
+            }
+          };
+
+          // 异步更新访问次数
+          updateAccessCount();
+          
+          return 0;
+        }
+        
+        return newCountdown;
+      });
+    }, 1000);
+
+    return () => {
+      if (accessCountdownRef.current) {
+        clearInterval(accessCountdownRef.current);
+      }
+    };
+  }, [accessSessionCountdown, linkInfo, currentLinkId]);
+
   // 组件挂载时获取数据
   useEffect(() => {
     // 🔥 检查是否是重新打开页面（没有保存的状态）
@@ -711,6 +959,9 @@ const CustomerPage: React.FC = () => {
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+      }
+      if (accessCountdownRef.current) {
+        clearInterval(accessCountdownRef.current);
       }
     };
   }, [currentLinkId, clearSessionStorage]);
@@ -1220,6 +1471,47 @@ const CustomerPage: React.FC = () => {
                     />
                   )}
                 </div>
+
+                {/* 🔥 新增：访问会话间隔倒计时 */}
+                {linkInfo.access_session_interval && accessSessionCountdown > 0 && (
+                  <Row justify="space-between" align="middle" style={{ 
+                    padding: '10px 14px',
+                    backgroundColor: 'rgba(250, 173, 20, 0.1)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(250, 173, 20, 0.2)',
+                    background: 'linear-gradient(135deg, rgba(255, 247, 230, 0.8) 0%, rgba(255, 247, 230, 0.4) 100%)'
+                  }}>
+                    <Col>
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: '#fa8c16' }}>
+                        会话倒计时: {Math.floor(accessSessionCountdown / 60)}分{accessSessionCountdown % 60}秒后访问次数+1
+                      </Text>
+                    </Col>
+                    <Col>
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '10px',
+                        padding: '4px 8px',
+                        backgroundColor: 'rgba(250, 173, 20, 0.15)',
+                        borderRadius: '6px'
+                      }}>
+                        <ClockCircleOutlined style={{ color: '#fa8c16', fontSize: 16 }} />
+                        <Text 
+                          style={{ 
+                            fontSize: 16, 
+                            fontWeight: 'bold', 
+                            color: '#fa8c16',
+                            fontFamily: 'SF Mono, Monaco, Consolas, monospace',
+                            minWidth: '45px',
+                            textAlign: 'center'
+                          }}
+                        >
+                          {accessSessionCountdown}s
+                        </Text>
+                      </div>
+                    </Col>
+                  </Row>
+                )}
 
                 {/* 验证码获取次数统计 - 🔥 修复：使用服务器端的真实次数 */}
                 <div>
