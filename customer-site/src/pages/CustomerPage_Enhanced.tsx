@@ -1405,9 +1405,7 @@ const CustomerPage: React.FC = () => {
                                 </div>
                               )}
                               
-                              {/* 🔥 调试信息 - 临时显示，帮助排查问题 */}
-                              <div style={{ 
-                                marginTop: '8px',
+                            </div>
 
                             {/* 时间信息 */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
