@@ -190,6 +190,9 @@ const CustomerPage: React.FC = () => {
         setAccessDenied(false);
         setError(null);
         setLastRefresh(new Date());
+
+        // 🔥 关键恢复：页面刷新时获取已有的短信，保留之前获取的验证码
+        await fetchExistingSms();
       } else {
         if (response.data.error === 'access_limit_exceeded') {
           setAccessDenied(true);
@@ -210,6 +213,58 @@ const CustomerPage: React.FC = () => {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 🔥 恢复功能：获取已有的短信（页面刷新时保留验证码）
+  const fetchExistingSms = async () => {
+    if (!currentLinkId) return;
+
+    try {
+      console.log('🔄 获取已有短信，保留页面刷新前的验证码...');
+      const response = await fetch(`${API_BASE_URL}/api/get_existing_sms?link_id=${currentLinkId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        console.warn('获取已有短信失败，继续正常流程');
+        return;
+      }
+
+      const data = await response.json();
+      console.log('📥 已有短信API响应:', data);
+
+      if (data.success && data.data?.all_matched_sms?.length > 0) {
+        // 将已有短信转换为验证码格式
+        const existingCodes: VerificationCode[] = data.data.all_matched_sms.map((sms: any, index: number) => {
+          const extractedCode = extractVerificationCode(sms.content);
+          return {
+            id: sms.id,
+            code: extractedCode || sms.content,
+            received_at: sms.sms_timestamp || new Date().toISOString(),
+            is_used: false,
+            full_content: sms.content,
+            sender: sms.sender,
+            progressive_index: index + 1
+          };
+        });
+
+        // 更新账号信息，保留已有的验证码
+        setAccountInfo(prev => prev ? {
+          ...prev,
+          verification_codes: existingCodes
+        } : null);
+
+        console.log(`✅ 页面刷新保留了 ${existingCodes.length} 条已有验证码`);
+      } else {
+        console.log('📭 没有已有短信需要保留');
+      }
+    } catch (error) {
+      console.error('❌ 获取已有短信失败:', error);
+      // 不影响主流程，继续正常运行
     }
   };
 
