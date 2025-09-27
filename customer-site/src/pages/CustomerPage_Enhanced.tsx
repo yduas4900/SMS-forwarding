@@ -1296,9 +1296,10 @@ const CustomerPage: React.FC = () => {
                         )}
                         
                         <div style={{ padding: index === 0 && isLimitReached ? '8px 16px 16px' : '16px' }}>
-                          <Row align="middle" justify="space-between">
-                            <Col flex="auto">
-                              <Space direction="vertical" size={8}>
+                          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                            {/* 验证码显示区域 */}
+                            <Row align="middle" justify="space-between">
+                              <Col flex="auto">
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                   <Text
                                     strong
@@ -1321,35 +1322,103 @@ const CustomerPage: React.FC = () => {
                                     </Tag>
                                   )}
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                  <ClockCircleOutlined style={{ color: freshness.color, fontSize: 14 }} />
-                                  <Text type="secondary" style={{ fontSize: 12 }}>
-                                    {formatTime(code.received_at)}
+                              </Col>
+                              <Col>
+                                <Button
+                                  type="primary"
+                                  ghost
+                                  icon={<CopyOutlined />}
+                                  size="small"
+                                  onClick={() => copyToClipboard(code.code, '验证码')}
+                                  disabled={code.is_used}
+                                  style={{
+                                    borderRadius: '10px',
+                                    fontWeight: '500',
+                                    boxShadow: '0 2px 8px rgba(24, 144, 255, 0.2)'
+                                  }}
+                                >
+                                  复制验证码
+                                </Button>
+                              </Col>
+                            </Row>
+
+                            {/* 完整短信内容显示区域 */}
+                            {code.full_content && (
+                              <div style={{
+                                padding: '12px',
+                                backgroundColor: 'rgba(240, 249, 255, 0.6)',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(186, 230, 253, 0.8)',
+                                position: 'relative'
+                              }}>
+                                <div style={{ 
+                                  display: 'flex', 
+                                  justifyContent: 'space-between', 
+                                  alignItems: 'flex-start',
+                                  marginBottom: '8px'
+                                }}>
+                                  <Text style={{ 
+                                    fontSize: 12, 
+                                    color: '#0369a1', 
+                                    fontWeight: '600'
+                                  }}>
+                                    完整短信内容
                                   </Text>
-                                  <Tag color={freshness.color} size="small" style={{ borderRadius: '10px' }}>
-                                    {freshness.text}
-                                  </Tag>
+                                  <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<CopyOutlined />}
+                                    onClick={() => copyToClipboard(code.full_content || '', '短信全文')}
+                                    style={{
+                                      fontSize: '11px',
+                                      height: '24px',
+                                      padding: '0 8px',
+                                      borderRadius: '6px',
+                                      color: '#0369a1'
+                                    }}
+                                  >
+                                    复制全文
+                                  </Button>
                                 </div>
-                              </Space>
-                            </Col>
-                            <Col>
-                              <Button
-                                type="primary"
-                                ghost
-                                icon={<CopyOutlined />}
-                                size="small"
-                                onClick={() => copyToClipboard(code.code, '验证码')}
-                                disabled={code.is_used}
-                                style={{
-                                  borderRadius: '10px',
-                                  fontWeight: '500',
-                                  boxShadow: '0 2px 8px rgba(24, 144, 255, 0.2)'
-                                }}
-                              >
-                                复制
-                              </Button>
-                            </Col>
-                          </Row>
+                                <Text style={{ 
+                                  fontSize: 13, 
+                                  color: '#1e40af',
+                                  lineHeight: '1.5',
+                                  display: 'block',
+                                  wordBreak: 'break-all',
+                                  whiteSpace: 'pre-wrap'
+                                }}>
+                                  {code.full_content}
+                                </Text>
+                                {code.sender && (
+                                  <div style={{ 
+                                    marginTop: '8px',
+                                    paddingTop: '8px',
+                                    borderTop: '1px solid rgba(186, 230, 253, 0.5)'
+                                  }}>
+                                    <Text style={{ 
+                                      fontSize: 11, 
+                                      color: '#64748b',
+                                      fontWeight: '500'
+                                    }}>
+                                      发送方: {code.sender}
+                                    </Text>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* 时间信息 */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <ClockCircleOutlined style={{ color: freshness.color, fontSize: 14 }} />
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                {formatTime(code.received_at)}
+                              </Text>
+                              <Tag color={freshness.color} size="small" style={{ borderRadius: '10px' }}>
+                                {freshness.text}
+                              </Tag>
+                            </div>
+                          </Space>
                         </div>
                       </Card>
                     );
