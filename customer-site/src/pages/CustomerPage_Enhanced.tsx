@@ -1186,26 +1186,12 @@ const CustomerPage: React.FC = () => {
             {/* 验证码列表 */}
             {accountInfo.verification_codes && accountInfo.verification_codes.length > 0 ? (
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                {/* 🔥 修复：验证码次数达到上限时的提示 - 放在验证码列表内部，避免布局变化 */}
-                {linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && 
-                 linkInfo.verification_count >= linkInfo.max_verification_count && (
-                  <Alert
-                    message="验证码获取次数已达上限"
-                    description="您已达到验证码获取次数的上限，无法继续获取新的验证码。如需继续使用，请联系管理员。"
-                    type="warning"
-                    showIcon
-                    style={{ 
-                      borderRadius: 8,
-                      border: '2px solid #faad14'
-                    }}
-                    icon={<ExclamationCircleOutlined />}
-                  />
-                )}
-                
                 {accountInfo.verification_codes
                   .sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime())
-                  .map((code) => {
+                  .map((code, index) => {
                     const freshness = getCodeFreshness(code.received_at);
+                    const isLimitReached = linkInfo && linkInfo.verification_count !== undefined && linkInfo.max_verification_count !== undefined && linkInfo.verification_count >= linkInfo.max_verification_count;
+                    
                     return (
                       <Card
                         key={code.id}
@@ -1217,6 +1203,25 @@ const CustomerPage: React.FC = () => {
                           boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                         }}
                       >
+                        {/* 🔥 修复：在第一个验证码卡片顶部显示限制提示，不影响布局 */}
+                        {index === 0 && isLimitReached && (
+                          <div style={{
+                            padding: '8px 12px',
+                            marginBottom: '12px',
+                            backgroundColor: '#fff7e6',
+                            borderRadius: '6px',
+                            border: '1px solid #ffd591',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                          }}>
+                            <ExclamationCircleOutlined style={{ color: '#faad14', fontSize: 16 }} />
+                            <Text style={{ fontSize: 12, color: '#d46b08' }}>
+                              验证码获取次数已达上限，无法继续获取新的验证码
+                            </Text>
+                          </div>
+                        )}
+                        
                         <Row align="middle" justify="space-between">
                           <Col flex="auto">
                             <Space direction="vertical" size={6}>
