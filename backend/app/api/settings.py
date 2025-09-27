@@ -13,6 +13,7 @@ import logging
 from ..database import get_db
 from ..api.auth import get_current_user
 from ..models.user import User
+from ..services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +57,6 @@ class SystemSettingsModel(BaseModel):
     customerSiteCustomCSS: str = Field(default="", description="客户端自定义CSS")
     enableCustomerSiteCustomization: bool = Field(default=True, description="启用客户端自定义")
 
-# 默认设置
-DEFAULT_SETTINGS = SystemSettingsModel()
-
-# 内存中的设置存储（在实际应用中，这应该存储在数据库中）
-_current_settings = DEFAULT_SETTINGS.dict()
-
 @router.get("", response_model=dict)
 async def get_settings(
     current_user: User = Depends(get_current_user),
@@ -74,13 +69,18 @@ async def get_settings(
     try:
         logger.info(f"用户 {current_user.username} 获取系统设置")
         
-        # 在实际应用中，这里应该从数据库读取设置
-        # 目前使用内存存储作为演示
+        # 从数据库获取所有设置
+        settings = SettingsService.get_all_settings(db)
+        
+        # 如果没有设置，初始化默认设置
+        if not settings:
+            SettingsService.initialize_default_settings(db)
+            settings = SettingsService.get_all_settings(db)
         
         return {
             "success": True,
             "message": "获取系统设置成功",
-            "data": _current_settings
+            "data": settings
         }
         
     except Exception as e:
@@ -101,13 +101,6 @@ async def update_settings(
     Update system settings
     """
     try:
-        # 暂时允许所有登录用户修改系统设置（后续可以根据需要添加权限控制）
-        # if not current_user.is_superuser:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_403_FORBIDDEN,
-        #         detail="权限不足，只有超级用户可以修改系统设置"
-        #     )
-        
         logger.info(f"管理员 {current_user.username} 更新系统设置")
         
         # 验证邮箱格式
@@ -141,16 +134,46 @@ async def update_settings(
                 detail=f"语言必须是以下值之一: {', '.join(valid_languages)}"
             )
         
-        # 更新设置（在实际应用中，这里应该保存到数据库）
-        global _current_settings
-        _current_settings = settings_data.dict()
+        # 将设置数据转换为字典并保存到数据库
+        settings_dict = settings_data.dict()
+        setting_types = {
+            "systemName": "string",
+            "systemDescription": "string", 
+            "systemVersion": "string",
+            "sessionTimeout": "integer",
+            "maxLoginAttempts": "integer",
+            "passwordMinLength": "integer",
+            "enableTwoFactor": "boolean",
+            "enableEmailNotification": "boolean",
+            "enableSmsNotification": "boolean",
+            "notificationEmail": "string",
+            "dataRetentionDays": "integer",
+            "autoBackup": "boolean",
+            "backupFrequency": "string",
+            "theme": "string",
+            "language": "string",
+            "timezone": "string",
+            "customerSiteTitle": "string",
+            "customerSiteDescription": "string",
+            "customerSiteWelcomeText": "string",
+            "customerSiteFooterText": "string",
+            "customerSiteBackgroundColor": "string",
+            "customerSiteLogoUrl": "string",
+            "customerSiteCustomCSS": "string",
+            "enableCustomerSiteCustomization": "boolean"
+        }
         
-        logger.info(f"系统设置更新成功: {json.dumps(_current_settings, ensure_ascii=False, indent=2)}")
+        # 保存每个设置到数据库
+        for key, value in settings_dict.items():
+            setting_type = setting_types.get(key, "string")
+            SettingsService.set_setting(db, key, value, setting_type)
+        
+        logger.info(f"系统设置更新成功")
         
         return {
             "success": True,
             "message": "系统设置更新成功",
-            "data": _current_settings
+            "data": settings_dict
         }
         
     except HTTPException:
@@ -172,23 +195,16 @@ async def reset_settings(
     Reset system settings to default values
     """
     try:
-        # 暂时允许所有登录用户重置系统设置
-        # if not current_user.is_superuser:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_403_FORBIDDEN,
-        #         detail="权限不足，只有超级用户可以重置系统设置"
-        #     )
-        
         logger.info(f"管理员 {current_user.username} 重置系统设置")
         
-        # 重置为默认设置
-        global _current_settings
-        _current_settings = DEFAULT_SETTINGS.dict()
+        # 重新初始化默认设置
+        SettingsService.initialize_default_settings(db)
+        settings = SettingsService.get_all_settings(db)
         
         return {
             "success": True,
             "message": "系统设置已重置为默认值",
-            "data": _current_settings
+            "data": settings
         }
         
     except HTTPException:
@@ -210,20 +226,15 @@ async def export_settings(
     Export system settings
     """
     try:
-        # 暂时允许所有登录用户导出系统设置
-        # if not current_user.is_superuser:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_403_FORBIDDEN,
-        #         detail="权限不足，只有超级用户可以导出系统设置"
-        #     )
-        
         logger.info(f"管理员 {current_user.username} 导出系统设置")
+        
+        settings = SettingsService.get_all_settings(db)
         
         return {
             "success": True,
             "message": "系统设置导出成功",
             "data": {
-                "settings": _current_settings,
+                "settings": settings,
                 "export_time": "2024-01-01T12:00:00Z",
                 "version": "1.0.0"
             }
@@ -249,13 +260,6 @@ async def import_settings(
     Import system settings
     """
     try:
-        # 暂时允许所有登录用户导入系统设置
-        # if not current_user.is_superuser:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_403_FORBIDDEN,
-        #         detail="权限不足，只有超级用户可以导入系统设置"
-        #     )
-        
         logger.info(f"管理员 {current_user.username} 导入系统设置")
         
         # 验证导入的设置数据
@@ -267,14 +271,43 @@ async def import_settings(
                 detail=f"导入的设置数据格式不正确: {str(e)}"
             )
         
-        # 更新设置
-        global _current_settings
-        _current_settings = imported_settings.dict()
+        # 保存导入的设置到数据库
+        settings_dict = imported_settings.dict()
+        setting_types = {
+            "systemName": "string",
+            "systemDescription": "string", 
+            "systemVersion": "string",
+            "sessionTimeout": "integer",
+            "maxLoginAttempts": "integer",
+            "passwordMinLength": "integer",
+            "enableTwoFactor": "boolean",
+            "enableEmailNotification": "boolean",
+            "enableSmsNotification": "boolean",
+            "notificationEmail": "string",
+            "dataRetentionDays": "integer",
+            "autoBackup": "boolean",
+            "backupFrequency": "string",
+            "theme": "string",
+            "language": "string",
+            "timezone": "string",
+            "customerSiteTitle": "string",
+            "customerSiteDescription": "string",
+            "customerSiteWelcomeText": "string",
+            "customerSiteFooterText": "string",
+            "customerSiteBackgroundColor": "string",
+            "customerSiteLogoUrl": "string",
+            "customerSiteCustomCSS": "string",
+            "enableCustomerSiteCustomization": "boolean"
+        }
+        
+        for key, value in settings_dict.items():
+            setting_type = setting_types.get(key, "string")
+            SettingsService.set_setting(db, key, value, setting_type)
         
         return {
             "success": True,
             "message": "系统设置导入成功",
-            "data": _current_settings
+            "data": settings_dict
         }
         
     except HTTPException:
@@ -292,23 +325,35 @@ async def get_customer_site_settings(
     db: Session = Depends(get_db)
 ):
     """
-    获取客户端页面设置
-    Get customer site settings
+    获取客户端页面设置（需要认证）
+    Get customer site settings (authenticated)
     """
     try:
         logger.info(f"用户 {current_user.username} 获取客户端页面设置")
         
-        # 提取客户端相关设置
-        customer_settings = {
-            "customerSiteTitle": _current_settings.get("customerSiteTitle", "验证码获取服务"),
-            "customerSiteDescription": _current_settings.get("customerSiteDescription", "安全便捷的验证码获取服务"),
-            "customerSiteWelcomeText": _current_settings.get("customerSiteWelcomeText", "<h2>欢迎使用验证码获取服务</h2><p>请按照以下步骤获取您的验证码：</p><ol><li>复制用户名和密码</li><li>点击获取验证码按钮</li><li>等待验证码到达</li></ol>"),
-            "customerSiteFooterText": _current_settings.get("customerSiteFooterText", "<p>如有问题，请联系客服。</p>"),
-            "customerSiteBackgroundColor": _current_settings.get("customerSiteBackgroundColor", "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"),
-            "customerSiteLogoUrl": _current_settings.get("customerSiteLogoUrl"),
-            "customerSiteCustomCSS": _current_settings.get("customerSiteCustomCSS", ""),
-            "enableCustomerSiteCustomization": _current_settings.get("enableCustomerSiteCustomization", True)
+        customer_settings = SettingsService.get_customer_site_settings(db)
+        
+        return {
+            "success": True,
+            "message": "获取客户端页面设置成功",
+            "data": customer_settings
         }
+        
+    except Exception as e:
+        logger.error(f"获取客户端页面设置失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="获取客户端页面设置失败"
+        )
+
+@router.get("/customer-site/public", response_model=dict)
+async def get_customer_site_settings_public(db: Session = Depends(get_db)):
+    """
+    获取客户端页面设置（公开接口，无需认证）
+    Get customer site settings (public, no authentication required)
+    """
+    try:
+        customer_settings = SettingsService.get_customer_site_settings(db)
         
         return {
             "success": True,
@@ -347,17 +392,21 @@ async def update_customer_site_settings(
     try:
         logger.info(f"管理员 {current_user.username} 更新客户端页面设置")
         
-        # 更新客户端相关设置
-        global _current_settings
-        _current_settings.update(customer_settings.dict())
+        # 更新客户端相关设置到数据库
+        success = SettingsService.update_customer_site_settings(db, customer_settings.dict())
         
-        logger.info(f"客户端页面设置更新成功")
-        
-        return {
-            "success": True,
-            "message": "客户端页面设置更新成功",
-            "data": customer_settings.dict()
-        }
+        if success:
+            logger.info(f"客户端页面设置更新成功")
+            return {
+                "success": True,
+                "message": "客户端页面设置更新成功",
+                "data": customer_settings.dict()
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="更新客户端页面设置失败"
+            )
         
     except Exception as e:
         logger.error(f"更新客户端页面设置失败: {str(e)}")

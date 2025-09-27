@@ -113,7 +113,8 @@ const CustomerPage: React.FC = () => {
   // 获取客户端设置
   const fetchCustomerSettings = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/settings/customer-site`);
+      // 使用公开API端点，无需认证
+      const response = await axios.get(`${API_BASE_URL}/api/settings/customer-site/public`);
       if (response.data.success) {
         setCustomerSettings(response.data.data);
         

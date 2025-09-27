@@ -1,0 +1,181 @@
+"""
+系统设置服务
+System settings service
+"""
+
+from sqlalchemy.orm import Session
+from typing import Dict, Any, Optional
+import json
+import logging
+
+from ..models.settings import SystemSettings
+from ..database import get_db
+
+logger = logging.getLogger(__name__)
+
+class SettingsService:
+    """设置服务类"""
+    
+    @staticmethod
+    def get_setting(db: Session, key: str, default_value: Any = None) -> Any:
+        """获取单个设置值"""
+        try:
+            setting = db.query(SystemSettings).filter(SystemSettings.setting_key == key).first()
+            if setting:
+                return setting.get_value()
+            return default_value
+        except Exception as e:
+            logger.error(f"获取设置 {key} 失败: {str(e)}")
+            return default_value
+    
+    @staticmethod
+    def set_setting(db: Session, key: str, value: Any, setting_type: str = "string", description: str = "") -> bool:
+        """设置单个设置值"""
+        try:
+            setting = db.query(SystemSettings).filter(SystemSettings.setting_key == key).first()
+            
+            if setting:
+                # 更新现有设置
+                setting.set_value(value)
+                setting.setting_type = setting_type
+                if description:
+                    setting.description = description
+            else:
+                # 创建新设置
+                setting = SystemSettings(
+                    setting_key=key,
+                    setting_type=setting_type,
+                    description=description
+                )
+                setting.set_value(value)
+                db.add(setting)
+            
+            db.commit()
+            return True
+        except Exception as e:
+            logger.error(f"设置 {key} 失败: {str(e)}")
+            db.rollback()
+            return False
+    
+    @staticmethod
+    def get_all_settings(db: Session) -> Dict[str, Any]:
+        """获取所有设置"""
+        try:
+            settings = db.query(SystemSettings).all()
+            result = {}
+            for setting in settings:
+                result[setting.setting_key] = setting.get_value()
+            return result
+        except Exception as e:
+            logger.error(f"获取所有设置失败: {str(e)}")
+            return {}
+    
+    @staticmethod
+    def get_customer_site_settings(db: Session) -> Dict[str, Any]:
+        """获取客户端页面设置"""
+        try:
+            customer_keys = [
+                "customerSiteTitle",
+                "customerSiteDescription", 
+                "customerSiteWelcomeText",
+                "customerSiteFooterText",
+                "customerSiteBackgroundColor",
+                "customerSiteLogoUrl",
+                "customerSiteCustomCSS",
+                "enableCustomerSiteCustomization"
+            ]
+            
+            result = {}
+            for key in customer_keys:
+                setting = db.query(SystemSettings).filter(SystemSettings.setting_key == key).first()
+                if setting:
+                    result[key] = setting.get_value()
+                else:
+                    # 提供默认值
+                    default_values = {
+                        "customerSiteTitle": "验证码获取服务",
+                        "customerSiteDescription": "安全便捷的验证码获取服务",
+                        "customerSiteWelcomeText": "<h2>欢迎使用验证码获取服务</h2><p>请按照以下步骤获取您的验证码：</p><ol><li>复制用户名和密码</li><li>点击获取验证码按钮</li><li>等待验证码到达</li></ol>",
+                        "customerSiteFooterText": "<p>如有问题，请联系客服。</p>",
+                        "customerSiteBackgroundColor": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                        "customerSiteLogoUrl": None,
+                        "customerSiteCustomCSS": "",
+                        "enableCustomerSiteCustomization": True
+                    }
+                    result[key] = default_values.get(key)
+            
+            return result
+        except Exception as e:
+            logger.error(f"获取客户端设置失败: {str(e)}")
+            return {}
+    
+    @staticmethod
+    def update_customer_site_settings(db: Session, settings: Dict[str, Any]) -> bool:
+        """更新客户端页面设置"""
+        try:
+            setting_types = {
+                "customerSiteTitle": "string",
+                "customerSiteDescription": "string",
+                "customerSiteWelcomeText": "string",
+                "customerSiteFooterText": "string", 
+                "customerSiteBackgroundColor": "string",
+                "customerSiteLogoUrl": "string",
+                "customerSiteCustomCSS": "string",
+                "enableCustomerSiteCustomization": "boolean"
+            }
+            
+            descriptions = {
+                "customerSiteTitle": "客户端页面标题",
+                "customerSiteDescription": "客户端页面描述",
+                "customerSiteWelcomeText": "客户端欢迎文本（支持HTML）",
+                "customerSiteFooterText": "客户端页脚文本（支持HTML）",
+                "customerSiteBackgroundColor": "客户端背景色",
+                "customerSiteLogoUrl": "客户端Logo URL",
+                "customerSiteCustomCSS": "客户端自定义CSS",
+                "enableCustomerSiteCustomization": "启用客户端自定义"
+            }
+            
+            for key, value in settings.items():
+                if key in setting_types:
+                    SettingsService.set_setting(
+                        db, 
+                        key, 
+                        value, 
+                        setting_types[key], 
+                        descriptions.get(key, "")
+                    )
+            
+            return True
+        except Exception as e:
+            logger.error(f"更新客户端设置失败: {str(e)}")
+            return False
+    
+    @staticmethod
+    def initialize_default_settings(db: Session):
+        """初始化默认设置"""
+        try:
+            default_settings = {
+                # 系统基础设置
+                "systemName": ("手机信息管理系统", "string", "系统名称"),
+                "systemDescription": ("用于管理手机设备信息、短信记录和账号链接的综合管理平台", "string", "系统描述"),
+                "systemVersion": ("v1.0.0", "string", "系统版本"),
+                
+                # 客户端设置
+                "customerSiteTitle": ("验证码获取服务", "string", "客户端页面标题"),
+                "customerSiteDescription": ("安全便捷的验证码获取服务", "string", "客户端页面描述"),
+                "customerSiteWelcomeText": ("<h2>欢迎使用验证码获取服务</h2><p>请按照以下步骤获取您的验证码：</p><ol><li>复制用户名和密码</li><li>点击获取验证码按钮</li><li>等待验证码到达</li></ol>", "string", "客户端欢迎文本（支持HTML）"),
+                "customerSiteFooterText": ("<p>如有问题，请联系客服。</p>", "string", "客户端页脚文本（支持HTML）"),
+                "customerSiteBackgroundColor": ("linear-gradient(135deg, #667eea 0%, #764ba2 100%)", "string", "客户端背景色"),
+                "customerSiteLogoUrl": (None, "string", "客户端Logo URL"),
+                "customerSiteCustomCSS": ("", "string", "客户端自定义CSS"),
+                "enableCustomerSiteCustomization": (True, "boolean", "启用客户端自定义"),
+            }
+            
+            for key, (value, setting_type, description) in default_settings.items():
+                existing = db.query(SystemSettings).filter(SystemSettings.setting_key == key).first()
+                if not existing:
+                    SettingsService.set_setting(db, key, value, setting_type, description)
+            
+            logger.info("默认设置初始化完成")
+        except Exception as e:
+            logger.error(f"初始化默认设置失败: {str(e)}")
