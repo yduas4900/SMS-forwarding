@@ -24,10 +24,13 @@ import {
   SaveOutlined,
   ReloadOutlined,
   ExclamationCircleOutlined,
-  AppstoreOutlined
+  AppstoreOutlined,
+  UserOutlined,
+  GlobalOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
 import ServiceTypeManagement from './ServiceTypeManagement';
+import CustomerSiteSettings from './CustomerSiteSettings';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -63,7 +66,9 @@ interface SystemSettings {
 
 const Settings: React.FC = () => {
   const [form] = Form.useForm();
+  const [customerForm] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const [customerLoading, setCustomerLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [settings, setSettings] = useState<SystemSettings>({
     systemName: '手机信息管理系统',
@@ -86,6 +91,28 @@ const Settings: React.FC = () => {
     theme: 'light',
     language: 'zh-CN',
     timezone: 'Asia/Shanghai'
+  });
+
+  const [customerSettings, setCustomerSettings] = useState({
+    welcomeTitle: '欢迎使用短信验证码服务',
+    welcomeContent: '请在下方输入框中输入您的用户名，然后点击"获取验证码"按钮获取最新的验证码信息。',
+    tutorialContent: `## 使用教程
+
+### 第一步：输入用户名
+在"用户名"输入框中输入您的用户名。
+
+### 第二步：获取验证码
+点击"获取验证码"按钮，系统将为您显示最新的验证码信息。
+
+### 第三步：查看验证码
+在下方的验证码列表中查看您需要的验证码。
+
+### 注意事项
+- 请确保输入正确的用户名
+- 验证码有时效性，请及时使用
+- 如有问题，请联系管理员`,
+    showTutorial: true,
+    maxDisplayCount: 5
   });
 
   // 获取当前设置
@@ -441,6 +468,16 @@ const Settings: React.FC = () => {
         </span>
       ),
       children: <ServiceTypeManagement />,
+    },
+    {
+      key: 'customer-site',
+      label: (
+        <span>
+          <GlobalOutlined />
+          客户浏览端设置
+        </span>
+      ),
+      children: <CustomerSiteSettings />,
     },
   ];
 

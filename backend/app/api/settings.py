@@ -45,6 +45,16 @@ class SystemSettingsModel(BaseModel):
     theme: str = Field(default="light", description="主题")
     language: str = Field(default="zh-CN", description="语言")
     timezone: str = Field(default="Asia/Shanghai", description="时区")
+    
+    # 客户浏览端设置
+    customerSiteTitle: str = Field(default="验证码获取服务", description="客户端页面标题")
+    customerSiteDescription: str = Field(default="安全便捷的验证码获取服务", description="客户端页面描述")
+    customerSiteWelcomeText: str = Field(default="<h2>欢迎使用验证码获取服务</h2><p>请按照以下步骤获取您的验证码：</p><ol><li>复制用户名和密码</li><li>点击获取验证码按钮</li><li>等待验证码到达</li></ol>", description="客户端欢迎文本（支持HTML）")
+    customerSiteFooterText: str = Field(default="<p>如有问题，请联系客服。</p>", description="客户端页脚文本（支持HTML）")
+    customerSiteBackgroundColor: str = Field(default="linear-gradient(135deg, #667eea 0%, #764ba2 100%)", description="客户端背景色")
+    customerSiteLogoUrl: Optional[str] = Field(default=None, description="客户端Logo URL")
+    customerSiteCustomCSS: str = Field(default="", description="客户端自定义CSS")
+    enableCustomerSiteCustomization: bool = Field(default=True, description="启用客户端自定义")
 
 # 默认设置
 DEFAULT_SETTINGS = SystemSettingsModel()
@@ -274,4 +284,84 @@ async def import_settings(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="导入系统设置失败"
+        )
+
+@router.get("/customer-site", response_model=dict)
+async def get_customer_site_settings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    获取客户端页面设置
+    Get customer site settings
+    """
+    try:
+        logger.info(f"用户 {current_user.username} 获取客户端页面设置")
+        
+        # 提取客户端相关设置
+        customer_settings = {
+            "customerSiteTitle": _current_settings.get("customerSiteTitle", "验证码获取服务"),
+            "customerSiteDescription": _current_settings.get("customerSiteDescription", "安全便捷的验证码获取服务"),
+            "customerSiteWelcomeText": _current_settings.get("customerSiteWelcomeText", "<h2>欢迎使用验证码获取服务</h2><p>请按照以下步骤获取您的验证码：</p><ol><li>复制用户名和密码</li><li>点击获取验证码按钮</li><li>等待验证码到达</li></ol>"),
+            "customerSiteFooterText": _current_settings.get("customerSiteFooterText", "<p>如有问题，请联系客服。</p>"),
+            "customerSiteBackgroundColor": _current_settings.get("customerSiteBackgroundColor", "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"),
+            "customerSiteLogoUrl": _current_settings.get("customerSiteLogoUrl"),
+            "customerSiteCustomCSS": _current_settings.get("customerSiteCustomCSS", ""),
+            "enableCustomerSiteCustomization": _current_settings.get("enableCustomerSiteCustomization", True)
+        }
+        
+        return {
+            "success": True,
+            "message": "获取客户端页面设置成功",
+            "data": customer_settings
+        }
+        
+    except Exception as e:
+        logger.error(f"获取客户端页面设置失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="获取客户端页面设置失败"
+        )
+
+class CustomerSiteSettingsModel(BaseModel):
+    """客户端页面设置模型"""
+    customerSiteTitle: str = Field(description="客户端页面标题")
+    customerSiteDescription: str = Field(description="客户端页面描述")
+    customerSiteWelcomeText: str = Field(description="客户端欢迎文本（支持HTML）")
+    customerSiteFooterText: str = Field(description="客户端页脚文本（支持HTML）")
+    customerSiteBackgroundColor: str = Field(description="客户端背景色")
+    customerSiteLogoUrl: Optional[str] = Field(default=None, description="客户端Logo URL")
+    customerSiteCustomCSS: str = Field(default="", description="客户端自定义CSS")
+    enableCustomerSiteCustomization: bool = Field(description="启用客户端自定义")
+
+@router.post("/customer-site", response_model=dict)
+async def update_customer_site_settings(
+    customer_settings: CustomerSiteSettingsModel,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    更新客户端页面设置
+    Update customer site settings
+    """
+    try:
+        logger.info(f"管理员 {current_user.username} 更新客户端页面设置")
+        
+        # 更新客户端相关设置
+        global _current_settings
+        _current_settings.update(customer_settings.dict())
+        
+        logger.info(f"客户端页面设置更新成功")
+        
+        return {
+            "success": True,
+            "message": "客户端页面设置更新成功",
+            "data": customer_settings.dict()
+        }
+        
+    except Exception as e:
+        logger.error(f"更新客户端页面设置失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="更新客户端页面设置失败"
         )
