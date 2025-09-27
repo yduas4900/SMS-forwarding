@@ -111,21 +111,32 @@ const WysiwygEditor: React.FC<WysiwygEditorProps> = ({
     setFontSize(size);
     if (editorRef.current) {
       editorRef.current.focus();
-      document.execCommand('fontSize', false, '7'); // 使用最大字号
-      // 然后用CSS覆盖
       const selection = window.getSelection();
       if (selection && selection.rangeCount > 0) {
         const range = selection.getRangeAt(0);
-        const span = document.createElement('span');
-        span.style.fontSize = `${size}px`;
-        span.style.fontFamily = fontFamily;
-        try {
-          range.surroundContents(span);
-        } catch (e) {
-          span.appendChild(range.extractContents());
+        if (range.collapsed) {
+          // 如果没有选中文字，设置当前位置的字体大小
+          const span = document.createElement('span');
+          span.style.fontSize = `${size}px`;
+          span.style.fontFamily = fontFamily;
+          span.innerHTML = '&nbsp;';
           range.insertNode(span);
+          range.setStartAfter(span);
+          range.setEndAfter(span);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        } else {
+          // 如果有选中文字，包装选中的内容
+          const span = document.createElement('span');
+          span.style.fontSize = `${size}px`;
+          span.style.fontFamily = fontFamily;
+          try {
+            range.surroundContents(span);
+          } catch (e) {
+            span.appendChild(range.extractContents());
+            range.insertNode(span);
+          }
         }
-        selection.removeAllRanges();
         handleContentChange();
       }
     }
@@ -134,7 +145,41 @@ const WysiwygEditor: React.FC<WysiwygEditorProps> = ({
   // 设置字体
   const setFontFamilyCommand = (family: string) => {
     setFontFamily(family);
-    execCommand('fontName', family);
+    if (editorRef.current) {
+      editorRef.current.focus();
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        if (range.collapsed) {
+          // 如果没有选中文字，设置当前位置的字体
+          const span = document.createElement('span');
+          span.style.fontFamily = family;
+          span.style.fontSize = `${fontSize}px`;
+          span.innerHTML = '&nbsp;';
+          range.insertNode(span);
+          range.setStartAfter(span);
+          range.setEndAfter(span);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        } else {
+          // 如果有选中文字，包装选中的内容
+          const span = document.createElement('span');
+          span.style.fontFamily = family;
+          span.style.fontSize = `${fontSize}px`;
+          try {
+            range.surroundContents(span);
+          } catch (e) {
+            span.appendChild(range.extractContents());
+            range.insertNode(span);
+          }
+        }
+        handleContentChange();
+      } else {
+        // 如果没有选择，使用document.execCommand作为备选
+        document.execCommand('fontName', false, family);
+        handleContentChange();
+      }
+    }
   };
 
   // 设置文字颜色
