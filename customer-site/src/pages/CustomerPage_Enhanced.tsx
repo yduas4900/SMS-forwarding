@@ -298,6 +298,35 @@ const CustomerPage: React.FC = () => {
       console.log(`✅ 第 ${smsIndex} 条短信API响应:`, data);
 
       if (data.success && data.data?.all_matched_sms?.length > 0) {
+        // 🔥 关键修复：实时更新统计数据
+        if (data.data.verification_count !== undefined && data.data.max_verification_count !== undefined) {
+          setLinkInfo(prev => prev ? {
+            ...prev,
+            verification_count: data.data.verification_count,
+            max_verification_count: data.data.max_verification_count
+          } : null);
+          
+          console.log(`📊 实时更新统计数据: ${data.data.verification_count}/${data.data.max_verification_count}`);
+          
+          // 🔥 友好提示：检查是否达到阈值
+          if (data.data.verification_count >= data.data.max_verification_count) {
+            message.warning({
+              content: '验证码获取次数已达上限！如需继续使用，请联系管理员。',
+              duration: 8,
+              style: {
+                marginTop: '20vh',
+              },
+            });
+          } else if (data.data.verification_count >= data.data.max_verification_count * 0.8) {
+            // 达到80%时提醒
+            const remaining = data.data.max_verification_count - data.data.verification_count;
+            message.info({
+              content: `提醒：验证码获取次数即将达到上限，还剩 ${remaining} 次。`,
+              duration: 5,
+            });
+          }
+        }
+
         // 过滤掉已经获取过的短信，获取最新的
         const newSms = data.data.all_matched_sms.filter((sms: any) => 
           !progressiveRetrievalState.retrievedSmsIds.has(sms.id)
