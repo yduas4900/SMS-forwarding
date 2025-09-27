@@ -202,78 +202,135 @@ const CustomerSiteSettings: React.FC = () => {
     return false; // 阻止默认上传行为
   };
 
-  // 增强的HTML编辑器工具栏
+  // 🔥 修复：增强的HTML编辑器工具栏 - 完全重写
   const insertHtmlTag = (tag: string, textAreaId: string, options: any = {}) => {
+    console.log('🔧 插入HTML标签:', { tag, textAreaId, options });
+    
     const textArea = document.getElementById(textAreaId) as HTMLTextAreaElement;
-    if (textArea) {
-      const start = textArea.selectionStart;
-      const end = textArea.selectionEnd;
-      const selectedText = textArea.value.substring(start, end);
+    if (!textArea) {
+      console.error('❌ 找不到文本框:', textAreaId);
+      return;
+    }
+
+    const start = textArea.selectionStart;
+    const end = textArea.selectionEnd;
+    const selectedText = textArea.value.substring(start, end);
+    const currentValue = textArea.value;
+    
+    console.log('📝 当前选中文本:', selectedText);
+    console.log('📄 当前文本框内容长度:', currentValue.length);
+    
+    let insertText = '';
+    switch (tag) {
+      case 'h1':
+        insertText = selectedText ? 
+          `<h1 style="color: ${selectedColor}; font-family: ${fontFamily};">${selectedText}</h1>` :
+          `<h1 style="color: ${selectedColor}; font-family: ${fontFamily};">主标题</h1>`;
+        break;
+      case 'h2':
+        insertText = selectedText ? 
+          `<h2 style="color: ${selectedColor}; font-family: ${fontFamily};">${selectedText}</h2>` :
+          `<h2 style="color: ${selectedColor}; font-family: ${fontFamily};">副标题</h2>`;
+        break;
+      case 'h3':
+        insertText = selectedText ? 
+          `<h3 style="color: ${selectedColor}; font-family: ${fontFamily};">${selectedText}</h3>` :
+          `<h3 style="color: ${selectedColor}; font-family: ${fontFamily};">小标题</h3>`;
+        break;
+      case 'p':
+        insertText = selectedText ? 
+          `<p style="color: ${selectedColor}; font-size: ${fontSize}px; font-family: ${fontFamily};">${selectedText}</p>` :
+          `<p style="color: ${selectedColor}; font-size: ${fontSize}px; font-family: ${fontFamily};">段落文本</p>`;
+        break;
+      case 'strong':
+        insertText = selectedText ? 
+          `<strong style="color: ${selectedColor};">${selectedText}</strong>` :
+          `<strong style="color: ${selectedColor};">粗体文本</strong>`;
+        break;
+      case 'em':
+        insertText = selectedText ? 
+          `<em style="color: ${selectedColor};">${selectedText}</em>` :
+          `<em style="color: ${selectedColor};">斜体文本</em>`;
+        break;
+      case 'u':
+        insertText = selectedText ? 
+          `<u style="color: ${selectedColor};">${selectedText}</u>` :
+          `<u style="color: ${selectedColor};">下划线文本</u>`;
+        break;
+      case 'ul':
+        insertText = selectedText ? 
+          `<ul style="color: ${selectedColor};"><li>${selectedText}</li></ul>` :
+          `<ul style="color: ${selectedColor};"><li>列表项1</li><li>列表项2</li></ul>`;
+        break;
+      case 'ol':
+        insertText = selectedText ? 
+          `<ol style="color: ${selectedColor};"><li>${selectedText}</li></ol>` :
+          `<ol style="color: ${selectedColor};"><li>列表项1</li><li>列表项2</li></ol>`;
+        break;
+      case 'center':
+        insertText = selectedText ? 
+          `<div style="text-align: center; color: ${selectedColor};">${selectedText}</div>` :
+          `<div style="text-align: center; color: ${selectedColor};">居中文本</div>`;
+        break;
+      case 'left':
+        insertText = selectedText ? 
+          `<div style="text-align: left; color: ${selectedColor};">${selectedText}</div>` :
+          `<div style="text-align: left; color: ${selectedColor};">左对齐文本</div>`;
+        break;
+      case 'right':
+        insertText = selectedText ? 
+          `<div style="text-align: right; color: ${selectedColor};">${selectedText}</div>` :
+          `<div style="text-align: right; color: ${selectedColor};">右对齐文本</div>`;
+        break;
+      case 'img':
+        if (options.imageUrl) {
+          insertText = `<img src="${options.imageUrl}" alt="上传的图片" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;" />`;
+        }
+        break;
+      case 'link':
+        const url = prompt('请输入链接地址:');
+        if (url) {
+          insertText = selectedText ? 
+            `<a href="${url}" style="color: ${selectedColor};" target="_blank">${selectedText}</a>` :
+            `<a href="${url}" style="color: ${selectedColor};" target="_blank">链接文本</a>`;
+        }
+        break;
+      case 'br':
+        insertText = '<br>\n';
+        break;
+      case 'hr':
+        insertText = '<hr style="border: 1px solid #ddd; margin: 20px 0;">\n';
+        break;
+      default:
+        insertText = selectedText;
+    }
+    
+    if (insertText) {
+      // 🔥 关键修复：正确更新文本框内容和表单值
+      const newValue = currentValue.substring(0, start) + insertText + currentValue.substring(end);
       
-      let insertText = '';
-      switch (tag) {
-        case 'h1':
-          insertText = `<h1 style="color: ${selectedColor}; font-family: ${fontFamily};">${selectedText || '主标题'}</h1>`;
-          break;
-        case 'h2':
-          insertText = `<h2 style="color: ${selectedColor}; font-family: ${fontFamily};">${selectedText || '副标题'}</h2>`;
-          break;
-        case 'h3':
-          insertText = `<h3 style="color: ${selectedColor}; font-family: ${fontFamily};">${selectedText || '小标题'}</h3>`;
-          break;
-        case 'p':
-          insertText = `<p style="color: ${selectedColor}; font-size: ${fontSize}px; font-family: ${fontFamily};">${selectedText || '段落文本'}</p>`;
-          break;
-        case 'strong':
-          insertText = `<strong style="color: ${selectedColor};">${selectedText || '粗体文本'}</strong>`;
-          break;
-        case 'em':
-          insertText = `<em style="color: ${selectedColor};">${selectedText || '斜体文本'}</em>`;
-          break;
-        case 'u':
-          insertText = `<u style="color: ${selectedColor};">${selectedText || '下划线文本'}</u>`;
-          break;
-        case 'ul':
-          insertText = `<ul style="color: ${selectedColor};"><li>${selectedText || '列表项'}</li></ul>`;
-          break;
-        case 'ol':
-          insertText = `<ol style="color: ${selectedColor};"><li>${selectedText || '列表项'}</li></ol>`;
-          break;
-        case 'center':
-          insertText = `<div style="text-align: center; color: ${selectedColor};">${selectedText || '居中文本'}</div>`;
-          break;
-        case 'left':
-          insertText = `<div style="text-align: left; color: ${selectedColor};">${selectedText || '左对齐文本'}</div>`;
-          break;
-        case 'right':
-          insertText = `<div style="text-align: right; color: ${selectedColor};">${selectedText || '右对齐文本'}</div>`;
-          break;
-        case 'img':
-          if (options.imageUrl) {
-            insertText = `<img src="${options.imageUrl}" alt="上传的图片" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;" />`;
-          }
-          break;
-        case 'link':
-          const url = prompt('请输入链接地址:');
-          if (url) {
-            insertText = `<a href="${url}" style="color: ${selectedColor};" target="_blank">${selectedText || '链接文本'}</a>`;
-          }
-          break;
-        case 'br':
-          insertText = '<br>';
-          break;
-        case 'hr':
-          insertText = '<hr style="border: 1px solid #ddd; margin: 20px 0;">';
-          break;
-        default:
-          insertText = selectedText;
-      }
+      console.log('🔄 更新后的内容:', newValue.substring(0, 100) + '...');
       
-      const newValue = textArea.value.substring(0, start) + insertText + textArea.value.substring(end);
+      // 1. 直接更新文本框的值
+      textArea.value = newValue;
       
-      // 更新表单值
+      // 2. 触发change事件，让React知道值已改变
+      const event = new Event('input', { bubbles: true });
+      textArea.dispatchEvent(event);
+      
+      // 3. 更新表单值
       const fieldName = textAreaId.replace('textarea-', '');
       form.setFieldsValue({ [fieldName]: newValue });
+      
+      // 4. 设置光标位置到插入内容的末尾
+      const newCursorPos = start + insertText.length;
+      setTimeout(() => {
+        textArea.setSelectionRange(newCursorPos, newCursorPos);
+        textArea.focus();
+      }, 10);
+      
+      console.log('✅ HTML标签插入成功');
+      message.success(`已插入${tag}标签`);
     }
   };
 
@@ -372,6 +429,36 @@ const CustomerSiteSettings: React.FC = () => {
 
           <Button size="small" onClick={() => insertHtmlTag('br', textAreaId)}>换行</Button>
           <Button size="small" onClick={() => insertHtmlTag('hr', textAreaId)}>分割线</Button>
+          
+          <Divider type="vertical" />
+          
+          <Button 
+            size="small" 
+            type="primary" 
+            ghost
+            onClick={() => {
+              // 🔥 快速测试功能
+              const testContent = `<h2 style="color: #1890ff; font-family: Microsoft YaHei;">测试标题</h2>
+<p style="color: #333; font-size: 16px; font-family: Microsoft YaHei;">这是一段测试文本，用于验证富文本编辑器功能是否正常工作。</p>
+<ul style="color: #666;">
+  <li>测试列表项1</li>
+  <li>测试列表项2</li>
+</ul>
+<div style="text-align: center; color: #52c41a;">居中的绿色文字</div>`;
+              
+              const textArea = document.getElementById(textAreaId) as HTMLTextAreaElement;
+              if (textArea) {
+                textArea.value = testContent;
+                const event = new Event('input', { bubbles: true });
+                textArea.dispatchEvent(event);
+                const fieldName = textAreaId.replace('textarea-', '');
+                form.setFieldsValue({ [fieldName]: testContent });
+                message.success('已插入测试内容');
+              }
+            }}
+          >
+            插入测试内容
+          </Button>
         </Space>
       </div>
 
@@ -466,12 +553,17 @@ const CustomerSiteSettings: React.FC = () => {
           >
             <div>
               <EnhancedHtmlToolbar textAreaId="textarea-customerSiteWelcomeText" />
-              <TextArea
-                id="textarea-customerSiteWelcomeText"
-                rows={8}
-                placeholder="输入欢迎文本，使用上方工具栏进行富文本编辑"
-                style={{ borderRadius: '0 0 6px 6px' }}
-              />
+              <Form.Item name="customerSiteWelcomeText" noStyle>
+                <TextArea
+                  id="textarea-customerSiteWelcomeText"
+                  rows={8}
+                  placeholder="输入欢迎文本，使用上方工具栏进行富文本编辑"
+                  style={{ borderRadius: '0 0 6px 6px' }}
+                  onChange={(e) => {
+                    console.log('🔄 欢迎文本内容变化:', e.target.value.length);
+                  }}
+                />
+              </Form.Item>
             </div>
           </Form.Item>
 
@@ -482,12 +574,17 @@ const CustomerSiteSettings: React.FC = () => {
           >
             <div>
               <EnhancedHtmlToolbar textAreaId="textarea-customerSiteFooterText" />
-              <TextArea
-                id="textarea-customerSiteFooterText"
-                rows={6}
-                placeholder="输入页脚文本，使用上方工具栏进行富文本编辑"
-                style={{ borderRadius: '0 0 6px 6px' }}
-              />
+              <Form.Item name="customerSiteFooterText" noStyle>
+                <TextArea
+                  id="textarea-customerSiteFooterText"
+                  rows={6}
+                  placeholder="输入页脚文本，使用上方工具栏进行富文本编辑"
+                  style={{ borderRadius: '0 0 6px 6px' }}
+                  onChange={(e) => {
+                    console.log('🔄 页脚文本内容变化:', e.target.value.length);
+                  }}
+                />
+              </Form.Item>
             </div>
           </Form.Item>
         </Card>
