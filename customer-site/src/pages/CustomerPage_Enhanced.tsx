@@ -684,18 +684,25 @@ const CustomerPage: React.FC = () => {
                   last_access_time: updatedLinkData.last_access_time
                 } : null);
 
-                // 🔥 友好提示：根据新的访问次数提醒用户
-                const newPercent = Math.round((updatedLinkData.access_count / updatedLinkData.max_access_count) * 100);
-                
-                if (newPercent >= 100) {
+                // 🔥 关键修复：检查访问次数是否达到上限，如果达到则跳转到访问受限页面
+                if (updatedLinkData.access_count >= updatedLinkData.max_access_count) {
+                  console.log('🚫 访问次数已达上限，跳转到访问受限页面');
+                  setAccessDenied(true);
+                  setError('此链接的访问次数已达上限，无法继续访问，请联系管理员。');
                   message.warning({
-                    content: '访问次数已达到上限！如需继续使用，请联系管理员。',
-                    duration: 8,
+                    content: '访问次数已达上限！页面将跳转到访问受限状态。',
+                    duration: 5,
                     style: {
                       marginTop: '20vh',
                     },
                   });
-                } else if (newPercent >= 80) {
+                  return; // 停止后续处理
+                }
+
+                // 🔥 友好提示：根据新的访问次数提醒用户
+                const newPercent = Math.round((updatedLinkData.access_count / updatedLinkData.max_access_count) * 100);
+                
+                if (newPercent >= 80) {
                   const remaining = updatedLinkData.max_access_count - updatedLinkData.access_count;
                   message.info({
                     content: `访问次数已增加！还剩 ${remaining} 次访问机会。`,
@@ -781,7 +788,7 @@ const CustomerPage: React.FC = () => {
               <ExclamationCircleOutlined style={{ fontSize: 48, color: '#ff4d4f', marginBottom: 16 }} />
               <Title level={4} type="danger">访问受限</Title>
               <Paragraph>
-                {accessDenied ? '此链接的访问次数已达上限，无法继续访问。' : error}
+                {accessDenied ? '此链接的访问次数已达上限，无法继续访问，请联系管理员。' : error}
               </Paragraph>
               {linkInfo && (
                 <div style={{ marginTop: 16, padding: 16, background: '#fff2f0', borderRadius: 8 }}>
