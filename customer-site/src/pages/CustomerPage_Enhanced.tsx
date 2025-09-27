@@ -750,17 +750,40 @@ const CustomerPage: React.FC = () => {
                 } : null);
 
                 // 🔥 关键修复：检查访问次数是否达到上限，如果达到则跳转到访问受限页面
+                console.log('🔍 检查访问次数限制:', {
+                  current: updatedLinkData.access_count,
+                  max: updatedLinkData.max_access_count,
+                  isLimitReached: updatedLinkData.access_count >= updatedLinkData.max_access_count
+                });
+
                 if (updatedLinkData.access_count >= updatedLinkData.max_access_count) {
-                  console.log('🚫 访问次数已达上限，跳转到访问受限页面');
+                  console.log('🚫 访问次数已达上限，立即跳转到访问受限页面');
+                  
+                  // 立即设置访问受限状态
                   setAccessDenied(true);
                   setError('此链接的访问次数已达上限，无法继续访问，请联系管理员。');
+                  
+                  // 清除倒计时
+                  setAccessSessionCountdown(0);
+                  if (accessCountdownRef.current) {
+                    clearInterval(accessCountdownRef.current);
+                  }
+                  
+                  // 显示跳转提示
                   message.warning({
-                    content: '访问次数已达上限！页面将跳转到访问受限状态。',
-                    duration: 5,
+                    content: '访问次数已达上限！页面正在跳转到访问受限状态。',
+                    duration: 3,
                     style: {
                       marginTop: '20vh',
                     },
                   });
+                  
+                  // 强制重新渲染
+                  setTimeout(() => {
+                    console.log('🔄 强制重新渲染页面状态');
+                    setLoading(false); // 确保不在加载状态
+                  }, 100);
+                  
                   return; // 停止后续处理
                 }
 
