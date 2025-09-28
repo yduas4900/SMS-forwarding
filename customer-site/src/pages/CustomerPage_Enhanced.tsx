@@ -682,56 +682,16 @@ const CustomerPage: React.FC = () => {
           const newCountdown = prev - 1;
           
           if (newCountdown <= 0) {
-            console.log('⏰ 访问会话倒计时结束，准备更新访问次数');
+            console.log('⏰ 访问会话倒计时结束');
             
-            // 倒计时结束，调用API更新访问次数
-            if (currentLinkId) {
-              fetch(`${API_BASE_URL}/api/increment_access_count`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ link_id: currentLinkId })
-              })
-              .then(response => response.json())
-              .then(data => {
-                if (data.success) {
-                  console.log('✅ 访问次数更新成功:', data.data);
-                  
-                  // 更新linkInfo中的访问次数
-                  setLinkInfo(prev => prev ? {
-                    ...prev,
-                    access_count: data.data.access_count
-                  } : null);
-                  
-                  // 检查是否达到访问上限
-                  if (data.data.access_count >= data.data.max_access_count) {
-                    console.log('🚫 访问次数已达上限，跳转到受限状态');
-                    setAccessDenied(true);
-                    message.warning('访问次数已达上限');
-                  } else {
-                    // 重新开始倒计时
-                    if (linkInfo?.access_session_interval) {
-                      const newCountdownSeconds = linkInfo.access_session_interval * 60;
-                      setAccessSessionCountdown(newCountdownSeconds);
-                      console.log('🔄 重新开始访问会话倒计时:', newCountdownSeconds, '秒');
-                    }
-                    
-                    // 提示用户访问次数增加
-                    const percentage = Math.round((data.data.access_count / data.data.max_access_count) * 100);
-                    if (percentage >= 80) {
-                      message.warning(`访问次数已使用 ${percentage}%，请注意访问频率`);
-                    } else {
-                      message.info(`访问次数已更新: ${data.data.access_count}/${data.data.max_access_count}`);
-                    }
-                  }
-                } else {
-                  console.error('❌ 访问次数更新失败:', data.message);
-                }
-              })
-              .catch(error => {
-                console.error('❌ 访问次数更新请求失败:', error);
-              });
+            // 倒计时结束，重新开始倒计时（访问次数由后端在get_account_info中自动管理）
+            if (linkInfo?.access_session_interval) {
+              const newCountdownSeconds = linkInfo.access_session_interval * 60;
+              setAccessSessionCountdown(newCountdownSeconds);
+              console.log('🔄 重新开始访问会话倒计时:', newCountdownSeconds, '秒');
+              
+              // 提示用户会话间隔已重置
+              message.info('访问会话间隔已重置，可以继续使用');
             }
             
             return 0;
