@@ -1112,9 +1112,22 @@ const CustomerPage: React.FC = () => {
                     const freshness = getCodeFreshness(sms.received_at);
                     const fullContent = sms.full_content || sms.code;
                     // 🔥 修复验证码识别问题：为每条短信单独提取验证码
-                    const extractedCode = sms.smart_recognition?.best_code?.code || 
-                                        extractVerificationCode(fullContent) || 
-                                        sms.code;
+                    let extractedCode = sms.code; // 默认使用原始code
+                    
+                    // 优先使用智能识别结果
+                    if (sms.smart_recognition?.best_code?.code) {
+                      extractedCode = sms.smart_recognition.best_code.code;
+                      console.log(`📱 短信${sms.id}使用智能识别结果:`, extractedCode, '置信度:', sms.smart_recognition.best_code.confidence);
+                    } else {
+                      // 回退到前端本地提取
+                      const localExtracted = extractVerificationCode(fullContent);
+                      if (localExtracted) {
+                        extractedCode = localExtracted;
+                        console.log(`🔧 短信${sms.id}使用前端提取结果:`, extractedCode);
+                      } else {
+                        console.log(`📝 短信${sms.id}使用原始内容:`, extractedCode);
+                      }
+                    }
                     
                     return (
                       <Card
