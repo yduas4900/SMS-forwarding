@@ -869,16 +869,23 @@ const CustomerPage: React.FC = () => {
         background: customerSettings.enableCustomerSiteCustomization ? customerSettings.customerSiteBackgroundColor : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         padding: '20px'
       }}>
-        <div style={{ maxWidth: 800, margin: '0 auto', width: '100%' }}>
+        <div style={{ 
+          maxWidth: 800, 
+          margin: '0 auto', 
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '24px'
+        }}>
           {/* 🔥 新增：客户端欢迎文本 */}
           {customerSettings.enableCustomerSiteCustomization && customerSettings.customerSiteWelcomeText && (
             <Card
               style={{
-                marginBottom: 24,
                 borderRadius: 12,
                 boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
                 background: 'rgba(255,255,255,0.95)',
-                width: '100%'
+                width: '100%',
+                flex: '0 0 auto'
               }}
             >
               <div
@@ -892,13 +899,13 @@ const CustomerPage: React.FC = () => {
           <Card 
             className="customer-card"
             style={{ 
-              marginBottom: 24,
               borderRadius: 12,
               boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-              width: '100%'
+              width: '100%',
+              flex: '0 0 auto'
             }}
           >
-            <Row gutter={[24, 24]} align="middle">
+            <Row gutter={[24, 24]} align="stretch">
               <Col xs={24} sm={8} style={{ textAlign: 'center' }}>
                 <Avatar
                   size={80}
@@ -1013,7 +1020,8 @@ const CustomerPage: React.FC = () => {
             style={{ 
               borderRadius: 12,
               boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-              width: '100%'
+              width: '100%',
+              flex: '0 0 auto'
             }}
           >
             {/* 🔥 渐进式获取状态显示 - 显示每条短信的独立倒计时 */}
@@ -1272,11 +1280,11 @@ const CustomerPage: React.FC = () => {
               }
               size="small"
               style={{ 
-                marginTop: 16,
                 borderRadius: 12,
                 background: 'rgba(255,255,255,0.95)',
                 boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-                width: '100%'
+                width: '100%',
+                flex: '0 0 auto'
               }}
             >
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
@@ -1421,11 +1429,11 @@ const CustomerPage: React.FC = () => {
           {customerSettings.enableCustomerSiteCustomization && customerSettings.customerSiteFooterText && (
             <Card
               style={{
-                marginTop: 24,
                 borderRadius: 12,
                 boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
                 background: 'rgba(255,255,255,0.95)',
-                width: '100%'
+                width: '100%',
+                flex: '0 0 auto'
               }}
             >
               <div
