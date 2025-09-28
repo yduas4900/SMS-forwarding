@@ -273,22 +273,29 @@ const CustomerPage: React.FC = () => {
         setError(null);
         setLastRefresh(new Date());
         
-        // 🔥 恢复：计算访问会话倒计时
-        if (linkData.last_access_time && linkData.access_session_interval) {
-          const lastAccessTime = new Date(linkData.last_access_time);
-          const sessionIntervalMs = linkData.access_session_interval * 60 * 1000; // 转换为毫秒
-          const elapsedTime = Date.now() - lastAccessTime.getTime();
-          const remainingTime = Math.max(0, sessionIntervalMs - elapsedTime);
-          const remainingSeconds = Math.ceil(remainingTime / 1000);
-          
-          console.log('⏰ 访问会话倒计时计算:', {
-            lastAccessTime: linkData.last_access_time,
-            sessionInterval: linkData.access_session_interval,
-            elapsedTime: Math.floor(elapsedTime / 1000),
-            remainingSeconds
-          });
-          
-          setAccessSessionCountdown(remainingSeconds);
+        // 🔥 修复：访问会话倒计时逻辑 - 确保首次访问也能正常显示
+        if (linkData.access_session_interval) {
+          if (linkData.last_access_time) {
+            // 有访问记录，计算剩余倒计时
+            const lastAccessTime = new Date(linkData.last_access_time);
+            const sessionIntervalMs = linkData.access_session_interval * 60 * 1000; // 转换为毫秒
+            const elapsedTime = Date.now() - lastAccessTime.getTime();
+            const remainingTime = Math.max(0, sessionIntervalMs - elapsedTime);
+            const remainingSeconds = Math.ceil(remainingTime / 1000);
+            
+            console.log('⏰ 访问会话倒计时计算:', {
+              lastAccessTime: linkData.last_access_time,
+              sessionInterval: linkData.access_session_interval,
+              elapsedTime: Math.floor(elapsedTime / 1000),
+              remainingSeconds
+            });
+            
+            setAccessSessionCountdown(remainingSeconds);
+          } else {
+            // 首次访问，设置为0（显示间隔信息）
+            console.log('🆕 首次访问，显示访问会话间隔信息');
+            setAccessSessionCountdown(0);
+          }
         }
       } else {
         if (response.data.error === 'access_limit_exceeded') {
