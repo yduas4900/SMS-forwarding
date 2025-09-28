@@ -169,6 +169,14 @@ const Settings: React.FC = () => {
     fetchSettings();
   }, []);
 
+  // 强制刷新表单数据的useEffect
+  useEffect(() => {
+    if (settings.systemName) {
+      console.log('强制设置表单值:', settings);
+      form.setFieldsValue(settings);
+    }
+  }, [settings, form]);
+
   const handleSave = async (values: SystemSettings) => {
     setLoading(true);
     try {
