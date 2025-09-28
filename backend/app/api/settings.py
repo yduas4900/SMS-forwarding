@@ -68,13 +68,45 @@ async def get_settings(
     try:
         logger.info(f"用户 {current_user.username} 获取系统设置")
         
+        # 强制重新初始化默认设置，确保所有设置都存在
+        SettingsService.initialize_default_settings(db)
+        
         # 从数据库获取所有设置
         settings = SettingsService.get_all_settings(db)
         
-        # 如果没有设置，初始化默认设置
-        if not settings:
-            SettingsService.initialize_default_settings(db)
-            settings = SettingsService.get_all_settings(db)
+        # 如果关键设置缺失，使用默认值
+        default_values = {
+            "systemName": "SMS转发管理系统",
+            "systemDescription": "专业的短信转发和验证码管理平台，支持多设备接入、智能验证码识别和客户端自定义设置",
+            "systemVersion": "2.0.0",
+            "sessionTimeout": 30,
+            "maxLoginAttempts": 5,
+            "passwordMinLength": 8,
+            "enableTwoFactor": False,
+            "enableEmailNotification": True,
+            "enableSmsNotification": False,
+            "notificationEmail": "admin@example.com",
+            "dataRetentionDays": 90,
+            "autoBackup": True,
+            "backupFrequency": "daily",
+            "theme": "light",
+            "language": "zh-CN",
+            "timezone": "Asia/Shanghai",
+            "customerSiteTitle": "验证码获取服务",
+            "customerSiteDescription": "安全便捷的验证码获取服务",
+            "customerSiteWelcomeText": "<h2>欢迎使用验证码获取服务</h2>",
+            "customerSiteFooterText": "<p>如有问题，请联系客服。</p>",
+            "customerSiteBackgroundColor": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            "customerSiteCustomCSS": "",
+            "enableCustomerSiteCustomization": True
+        }
+        
+        # 确保所有必需的设置都有值
+        for key, default_value in default_values.items():
+            if key not in settings or settings[key] is None:
+                settings[key] = default_value
+        
+        logger.info(f"返回设置数据: systemName={settings.get('systemName')}, systemVersion={settings.get('systemVersion')}")
         
         return {
             "success": True,
