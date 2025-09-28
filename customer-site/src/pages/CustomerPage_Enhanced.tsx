@@ -1111,22 +1111,21 @@ const CustomerPage: React.FC = () => {
                   .map((sms) => {
                     const freshness = getCodeFreshness(sms.received_at);
                     const fullContent = sms.full_content || sms.code;
-                    // 🔥 修复验证码识别问题：为每条短信单独提取验证码
+                    // 🔥 彻底修复验证码识别问题：完全使用前端本地提取，忽略后端智能识别
                     let extractedCode = sms.code; // 默认使用原始code
                     
-                    // 优先使用智能识别结果
-                    if (sms.smart_recognition?.best_code?.code) {
-                      extractedCode = sms.smart_recognition.best_code.code;
-                      console.log(`📱 短信${sms.id}使用智能识别结果:`, extractedCode, '置信度:', sms.smart_recognition.best_code.confidence);
+                    // 使用前端本地提取（最可靠的方法）
+                    const localExtracted = extractVerificationCode(fullContent);
+                    if (localExtracted) {
+                      extractedCode = localExtracted;
+                      console.log(`🔧 短信${sms.id}使用前端提取结果:`, extractedCode, '短信内容:', fullContent);
                     } else {
-                      // 回退到前端本地提取
-                      const localExtracted = extractVerificationCode(fullContent);
-                      if (localExtracted) {
-                        extractedCode = localExtracted;
-                        console.log(`🔧 短信${sms.id}使用前端提取结果:`, extractedCode);
-                      } else {
-                        console.log(`📝 短信${sms.id}使用原始内容:`, extractedCode);
-                      }
+                      console.log(`📝 短信${sms.id}使用原始内容:`, extractedCode, '短信内容:', fullContent);
+                    }
+                    
+                    // 记录后端智能识别结果但不使用（用于调试）
+                    if (sms.smart_recognition?.best_code?.code) {
+                      console.log(`📊 短信${sms.id}后端智能识别结果（已忽略）:`, sms.smart_recognition.best_code.code, '置信度:', sms.smart_recognition.best_code.confidence);
                     }
                     
                     return (
