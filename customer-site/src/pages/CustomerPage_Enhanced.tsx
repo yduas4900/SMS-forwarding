@@ -604,13 +604,14 @@ const CustomerPage: React.FC = () => {
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
-    // 🔥 修复手机端日期显示问题：使用更紧凑的格式
-    return date.toLocaleString('zh-CN', {
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).replace(/\//g, '/').replace(/\s/g, ' ');
+    // 🔥 修复手机端日期显示问题：使用紧凑的单行格式
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hour = String(date.getHours()).padStart(2, '0');
+    const minute = String(date.getMinutes()).padStart(2, '0');
+    
+    // 返回紧凑的单行格式：MM-DD HH:mm
+    return `${month}-${day} ${hour}:${minute}`;
   };
 
   const getCodeFreshness = (receivedAt: string) => {
