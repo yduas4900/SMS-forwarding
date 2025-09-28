@@ -237,7 +237,6 @@ const Settings: React.FC = () => {
     <Form
       form={form}
       layout="vertical"
-      initialValues={settings}
       onFinish={handleSave}
     >
       {/* 系统基础设置 */}
