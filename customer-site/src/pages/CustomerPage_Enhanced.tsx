@@ -440,13 +440,14 @@ const CustomerPage: React.FC = () => {
           let extractedCode = latestSms.content;
           let smartRecognition = null;
           
+          // 🔥 紧急修复：完全使用前端本地提取，不依赖后端智能识别
+          extractedCode = extractVerificationCode(latestSms.content) || latestSms.content;
+          console.log('🔧 使用前端本地提取的验证码:', extractedCode, '短信内容:', latestSms.content);
+          
+          // 保留智能识别数据但不使用其结果
           if (data.data.smart_recognition && data.data.smart_recognition.best_code) {
-            extractedCode = data.data.smart_recognition.best_code.code;
             smartRecognition = data.data.smart_recognition;
-            console.log('🧠 使用智能识别的验证码:', extractedCode, '置信度:', data.data.smart_recognition.best_code.confidence);
-          } else {
-            extractedCode = extractVerificationCode(latestSms.content) || latestSms.content;
-            console.log('🔧 使用本地提取的验证码:', extractedCode);
+            console.log('📊 后端智能识别结果（仅记录）:', data.data.smart_recognition.best_code.code, '置信度:', data.data.smart_recognition.best_code.confidence);
           }
           
           const newCode: VerificationCode = {
