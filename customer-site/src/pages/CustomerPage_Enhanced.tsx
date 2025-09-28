@@ -947,43 +947,45 @@ const CustomerPage: React.FC = () => {
                 </div>
               </Col>
             </Row>
+            
+            {/* 获取验证码按钮 - 放在账号信息卡片底部 */}
+            <div style={{ 
+              marginTop: '24px',
+              paddingTop: '20px',
+              borderTop: '1px solid #f0f0f0',
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center'
+            }}>
+              <Button
+                type="primary"
+                size="large"
+                icon={<CheckCircleOutlined />}
+                onClick={startProgressiveRetrieval}
+                disabled={
+                  progressiveRetrievalState.isActive || 
+                  (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count)
+                }
+                loading={loading}
+                style={{
+                  height: '44px',
+                  fontSize: '15px',
+                  fontWeight: 'bold',
+                  borderRadius: '22px',
+                  padding: '0 28px',
+                  boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
+                  opacity: (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count) ? 0.5 : 1
+                }}
+              >
+                {progressiveRetrievalState.isActive 
+                  ? '获取中...' 
+                  : (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count)
+                    ? '已达上限'
+                    : '获取验证码'
+                }
+              </Button>
+            </div>
           </Card>
-
-          {/* 获取验证码按钮 - 移到独立位置，手机和电脑都明显 */}
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'center', 
-            alignItems: 'center',
-            padding: '16px 0'
-          }}>
-            <Button
-              type="primary"
-              size="large"
-              icon={<CheckCircleOutlined />}
-              onClick={startProgressiveRetrieval}
-              disabled={
-                progressiveRetrievalState.isActive || 
-                (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count)
-              }
-              loading={loading}
-              style={{
-                height: '48px',
-                fontSize: '16px',
-                fontWeight: 'bold',
-                borderRadius: '24px',
-                padding: '0 32px',
-                boxShadow: '0 4px 16px rgba(24, 144, 255, 0.3)',
-                opacity: (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count) ? 0.5 : 1
-              }}
-            >
-              {progressiveRetrievalState.isActive 
-                ? '获取中...' 
-                : (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count)
-                  ? '已达上限'
-                  : '获取验证码'
-              }
-            </Button>
-          </div>
 
           {/* 验证码卡片 */}
           <Card
