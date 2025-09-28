@@ -1152,14 +1152,27 @@ const CustomerPage: React.FC = () => {
                               {sms.is_used && (
                                 <Tag color="default" size="small">已使用</Tag>
                               )}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                                 <ClockCircleOutlined style={{ color: freshness.color }} />
-                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                  {formatTime(sms.received_at)}
-                                </Text>
-                                <Tag color={freshness.color} size="small">
-                                  {freshness.text}
-                                </Tag>
+                                <div style={{ 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  gap: 8,
+                                  flexWrap: 'wrap',
+                                  minWidth: '100%'
+                                }}>
+                                  <Text type="secondary" style={{ 
+                                    fontSize: 12,
+                                    whiteSpace: 'nowrap',
+                                    display: 'block',
+                                    width: '100%'
+                                  }}>
+                                    {formatTime(sms.received_at)}
+                                  </Text>
+                                  <Tag color={freshness.color} size="small" style={{ marginTop: 4 }}>
+                                    {freshness.text}
+                                  </Tag>
+                                </div>
                               </div>
                             </div>
                             {sms.sender && (
