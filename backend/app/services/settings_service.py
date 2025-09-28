@@ -156,9 +156,9 @@ class SettingsService:
         try:
             default_settings = {
                 # 系统基础设置
-                "systemName": ("手机信息管理系统", "string", "系统名称"),
-                "systemDescription": ("用于管理手机设备信息、短信记录和账号链接的综合管理平台", "string", "系统描述"),
-                "systemVersion": ("v1.0.0", "string", "系统版本"),
+                "systemName": ("SMS转发管理系统", "string", "系统名称"),
+                "systemDescription": ("专业的短信转发和验证码管理平台，支持多设备接入、智能验证码识别和客户端自定义设置", "string", "系统描述"),
+                "systemVersion": ("v2.0.0", "string", "系统版本"),
                 
                 # 客户端设置
                 "customerSiteTitle": ("验证码获取服务", "string", "客户端页面标题"),

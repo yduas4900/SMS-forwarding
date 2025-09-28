@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     """应用配置类"""
     
     # 应用基础配置
-    app_name: str = "Mobile Information Management System"
-    app_version: str = "1.0.0"
+    app_name: str = "SMS转发管理系统"
+    app_version: str = "2.0.0"
     debug: bool = False
     
     # 数据库配置
