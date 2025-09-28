@@ -906,23 +906,34 @@ const CustomerPage: React.FC = () => {
             }}
           >
             <Row gutter={[24, 24]} align="stretch">
-              <Col xs={24} sm={8} style={{ textAlign: 'center' }}>
-                <Avatar
-                  size={80}
-                  src={accountInfo.avatar_url ? (
-                    accountInfo.avatar_url.startsWith('http') 
-                      ? accountInfo.avatar_url 
-                      : `${API_BASE_URL}${accountInfo.avatar_url}`
-                  ) : undefined}
-                  icon={<UserOutlined />}
-                  style={{ marginBottom: 16 }}
-                />
-                <Title level={4} style={{ margin: 0, color: '#1890ff' }}>
-                  {accountInfo.account_name}
-                </Title>
-                <Tag color="blue" style={{ marginTop: 8 }}>
-                  {accountInfo.service_type}
-                </Tag>
+              <Col xs={24} sm={8}>
+                <div style={{ 
+                  textAlign: 'center',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  minHeight: '200px',
+                  padding: '20px 0'
+                }}>
+                  <Avatar
+                    size={80}
+                    src={accountInfo.avatar_url ? (
+                      accountInfo.avatar_url.startsWith('http') 
+                        ? accountInfo.avatar_url 
+                        : `${API_BASE_URL}${accountInfo.avatar_url}`
+                    ) : undefined}
+                    icon={<UserOutlined />}
+                    style={{ marginBottom: 16 }}
+                  />
+                  <Title level={4} style={{ margin: 0, color: '#1890ff' }}>
+                    {accountInfo.account_name}
+                  </Title>
+                  <Tag color="blue" style={{ marginTop: 8 }}>
+                    {accountInfo.service_type}
+                  </Tag>
+                </div>
               </Col>
               
               <Col xs={24} sm={16}>
