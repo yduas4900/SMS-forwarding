@@ -331,23 +331,35 @@ async def get_latest_verification_code(
         # 🔥 智能验证码识别：使用新的智能提取服务
         from ..services.verification_code_extractor import verification_extractor
         
-        verification_sms = matched_sms_list[0]  # 使用第一条匹配的短信
+        # 🔥 修复：为每条短信单独进行验证码识别，而不是只用第一条
+        verification_sms = matched_sms_list[0]  # 主要用于返回基本信息
+        verification_code = None
+        best_code = None
+        verification_analysis = None
         
-        # 🎯 智能提取验证码，支持国内外短信特征识别
-        verification_analysis = verification_extractor.get_all_possible_codes(
-            verification_sms.content, 
-            verification_sms.sender
-        )
+        # 🎯 对每条匹配的短信进行智能识别，找到最佳验证码
+        best_confidence = 0
+        for sms in matched_sms_list:
+            sms_analysis = verification_extractor.get_all_possible_codes(
+                sms.content, 
+                sms.sender
+            )
+            
+            sms_best_code = sms_analysis.get('best_match')
+            if sms_best_code and sms_best_code.confidence > best_confidence:
+                best_confidence = sms_best_code.confidence
+                best_code = sms_best_code
+                verification_code = sms_best_code.code
+                verification_analysis = sms_analysis
+                verification_sms = sms  # 更新为包含最佳验证码的短信
+                
+                logger.info(f"🎯 发现更好的验证码: SMS ID={sms.id}, 代码={sms_best_code.code}, 置信度={sms_best_code.confidence:.2f}")
         
-        # 获取最佳验证码
-        best_code = verification_analysis.get('best_match')
-        verification_code = best_code.code if best_code else None
-        
-        # 记录智能识别结果
+        # 记录最终识别结果
         if best_code:
-            logger.info(f"🎯 智能验证码识别成功: 代码={best_code.code}, 类型={best_code.pattern_type}, 置信度={best_code.confidence:.2f}, 地区={verification_analysis['region']}")
+            logger.info(f"🎯 最终智能验证码识别结果: 代码={best_code.code}, 类型={best_code.pattern_type}, 置信度={best_code.confidence:.2f}, 地区={verification_analysis['region']}")
         else:
-            logger.info(f"❌ 未识别到验证码: 地区={verification_analysis['region']}")
+            logger.info(f"❌ 未识别到验证码")
         
         # 🔥 新功能：动态获取最新短信，支持实时更新
         # 不在这里等待，而是返回当前匹配的短信，让前端处理倒计时和动态获取

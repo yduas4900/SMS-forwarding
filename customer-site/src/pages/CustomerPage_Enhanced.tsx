@@ -603,14 +603,13 @@ const CustomerPage: React.FC = () => {
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
+    // 🔥 修复手机端日期显示问题：使用更紧凑的格式
     return date.toLocaleString('zh-CN', {
-      year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
+      minute: '2-digit'
+    }).replace(/\//g, '/').replace(/\s/g, ' ');
   };
 
   const getCodeFreshness = (receivedAt: string) => {
@@ -1111,7 +1110,10 @@ const CustomerPage: React.FC = () => {
                   .map((sms) => {
                     const freshness = getCodeFreshness(sms.received_at);
                     const fullContent = sms.full_content || sms.code;
-                    const extractedCode = sms.code;
+                    // 🔥 修复验证码识别问题：为每条短信单独提取验证码
+                    const extractedCode = sms.smart_recognition?.best_code?.code || 
+                                        extractVerificationCode(fullContent) || 
+                                        sms.code;
                     
                     return (
                       <Card
