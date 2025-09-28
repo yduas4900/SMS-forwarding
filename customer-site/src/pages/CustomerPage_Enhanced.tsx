@@ -895,14 +895,15 @@ const CustomerPage: React.FC = () => {
             </Card>
           )}
 
-          {/* 账号信息卡片 - 使用CSS Grid布局确保等高 */}
+          {/* 账号信息卡片 */}
           <Card 
             className="customer-card"
             style={{ 
               borderRadius: 12,
               boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
               width: '100%',
-              flex: '0 0 auto'
+              maxWidth: '100%',
+              flex: '1 1 auto'
             }}
           >
             <Row gutter={[24, 24]} align="middle">
