@@ -27,34 +27,34 @@ class SystemSettingsModel(BaseModel):
     systemVersion: str = Field(description="系统版本")
     
     # 安全设置
-    sessionTimeout: int = Field(default=30, ge=5, le=480, description="会话超时时间（分钟）")
-    maxLoginAttempts: int = Field(default=5, ge=3, le=10, description="最大登录尝试次数")
-    passwordMinLength: int = Field(default=8, ge=6, le=20, description="密码最小长度")
-    enableTwoFactor: bool = Field(default=False, description="启用双因素认证")
+    sessionTimeout: int = Field(ge=5, le=480, description="会话超时时间（分钟）")
+    maxLoginAttempts: int = Field(ge=3, le=10, description="最大登录尝试次数")
+    passwordMinLength: int = Field(ge=6, le=20, description="密码最小长度")
+    enableTwoFactor: bool = Field(description="启用双因素认证")
     
     # 通知设置
-    enableEmailNotification: bool = Field(default=True, description="启用邮件通知")
-    enableSmsNotification: bool = Field(default=False, description="启用短信通知")
-    notificationEmail: str = Field(default="admin@example.com", description="通知邮箱")
+    enableEmailNotification: bool = Field(description="启用邮件通知")
+    enableSmsNotification: bool = Field(description="启用短信通知")
+    notificationEmail: str = Field(description="通知邮箱")
     
     # 数据设置
-    dataRetentionDays: int = Field(default=90, ge=30, le=365, description="数据保留天数")
-    autoBackup: bool = Field(default=True, description="启用自动备份")
-    backupFrequency: str = Field(default="daily", description="备份频率")
+    dataRetentionDays: int = Field(ge=30, le=365, description="数据保留天数")
+    autoBackup: bool = Field(description="启用自动备份")
+    backupFrequency: str = Field(description="备份频率")
     
     # 界面设置
-    theme: str = Field(default="light", description="主题")
-    language: str = Field(default="zh-CN", description="语言")
-    timezone: str = Field(default="Asia/Shanghai", description="时区")
+    theme: str = Field(description="主题")
+    language: str = Field(description="语言")
+    timezone: str = Field(description="时区")
     
     # 客户浏览端设置
-    customerSiteTitle: str = Field(default="验证码获取服务", description="客户端页面标题")
-    customerSiteDescription: str = Field(default="安全便捷的验证码获取服务", description="客户端页面描述")
-    customerSiteWelcomeText: str = Field(default="<h2>欢迎使用验证码获取服务</h2><p>请按照以下步骤获取您的验证码：</p><ol><li>复制用户名和密码</li><li>点击获取验证码按钮</li><li>等待验证码到达</li></ol>", description="客户端欢迎文本（支持HTML）")
-    customerSiteFooterText: str = Field(default="<p>如有问题，请联系客服。</p>", description="客户端页脚文本（支持HTML）")
-    customerSiteBackgroundColor: str = Field(default="linear-gradient(135deg, #667eea 0%, #764ba2 100%)", description="客户端背景色")
-    customerSiteCustomCSS: str = Field(default="", description="客户端自定义CSS")
-    enableCustomerSiteCustomization: bool = Field(default=True, description="启用客户端自定义")
+    customerSiteTitle: str = Field(description="客户端页面标题")
+    customerSiteDescription: str = Field(description="客户端页面描述")
+    customerSiteWelcomeText: str = Field(description="客户端欢迎文本（支持HTML）")
+    customerSiteFooterText: str = Field(description="客户端页脚文本（支持HTML）")
+    customerSiteBackgroundColor: str = Field(description="客户端背景色")
+    customerSiteCustomCSS: str = Field(description="客户端自定义CSS")
+    enableCustomerSiteCustomization: bool = Field(description="启用客户端自定义")
 
 @router.get("", response_model=dict)
 async def get_settings(
