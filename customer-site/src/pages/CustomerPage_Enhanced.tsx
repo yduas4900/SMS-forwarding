@@ -906,26 +906,24 @@ const CustomerPage: React.FC = () => {
             }}
           >
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 2fr',
+              display: 'flex',
               gap: '24px',
-              minHeight: '200px',
-              '@media (max-width: 768px)': {
-                gridTemplateColumns: '1fr',
-                gap: '16px'
-              }
+              minHeight: '300px',
+              alignItems: 'stretch'
             }}>
               {/* 左侧用户信息区域 */}
               <div style={{ 
+                flex: '0 0 250px',
                 textAlign: 'center',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
                 alignItems: 'center',
-                padding: '20px',
+                padding: '30px 20px',
                 background: '#fafafa',
                 borderRadius: '8px',
-                border: '1px solid #f0f0f0'
+                border: '1px solid #f0f0f0',
+                height: '100%'
               }}>
                 <Avatar
                   size={80}
@@ -947,31 +945,34 @@ const CustomerPage: React.FC = () => {
               
               {/* 右侧账号信息区域 */}
               <div style={{ 
+                flex: '1',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
-                padding: '20px'
+                padding: '30px 20px',
+                height: '100%'
               }}>
-                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                <Space direction="vertical" size="large" style={{ width: '100%' }}>
                   {/* 用户名 */}
                   <div>
-                    <Text strong style={{ color: '#666' }}>用户名</Text>
+                    <Text strong style={{ color: '#666', fontSize: '16px' }}>用户名</Text>
                     <div style={{ 
                       display: 'flex', 
                       alignItems: 'center', 
-                      marginTop: 4,
-                      padding: '8px 12px',
+                      marginTop: 8,
+                      padding: '12px 16px',
                       background: '#f5f5f5',
-                      borderRadius: 6,
-                      border: '1px solid #d9d9d9'
+                      borderRadius: 8,
+                      border: '1px solid #d9d9d9',
+                      minHeight: '48px'
                     }}>
-                      <Text copyable={{ text: accountInfo.username }} style={{ flex: 1 }}>
+                      <Text copyable={{ text: accountInfo.username }} style={{ flex: 1, fontSize: '16px' }}>
                         {accountInfo.username}
                       </Text>
                       <Button
                         type="text"
                         icon={<CopyOutlined />}
-                        size="small"
+                        size="middle"
                         onClick={() => copyToClipboard(accountInfo.username, '用户名')}
                       />
                     </div>
@@ -979,23 +980,24 @@ const CustomerPage: React.FC = () => {
                   
                   {/* 密码 */}
                   <div>
-                    <Text strong style={{ color: '#666' }}>密码</Text>
+                    <Text strong style={{ color: '#666', fontSize: '16px' }}>密码</Text>
                     <div style={{ 
                       display: 'flex', 
                       alignItems: 'center', 
-                      marginTop: 4,
-                      padding: '8px 12px',
+                      marginTop: 8,
+                      padding: '12px 16px',
                       background: '#f5f5f5',
-                      borderRadius: 6,
-                      border: '1px solid #d9d9d9'
+                      borderRadius: 8,
+                      border: '1px solid #d9d9d9',
+                      minHeight: '48px'
                     }}>
-                      <Text copyable={{ text: accountInfo.password }} style={{ flex: 1 }}>
+                      <Text copyable={{ text: accountInfo.password }} style={{ flex: 1, fontSize: '16px' }}>
                         {accountInfo.password}
                       </Text>
                       <Button
                         type="text"
                         icon={<CopyOutlined />}
-                        size="small"
+                        size="middle"
                         onClick={() => copyToClipboard(accountInfo.password, '密码')}
                       />
                     </div>
