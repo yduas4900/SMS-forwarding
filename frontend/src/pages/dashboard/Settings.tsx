@@ -127,13 +127,39 @@ const Settings: React.FC = () => {
       
       if (response.data.success) {
         const fetchedSettings = response.data.data;
+        console.log('获取到的设置数据:', fetchedSettings);
         setSettings(fetchedSettings);
         form.setFieldsValue(fetchedSettings);
+      } else {
+        console.error('API返回失败:', response.data);
+        message.error('获取系统设置失败');
       }
     } catch (error) {
-      console.log('获取设置失败，使用默认设置:', error);
-      // 使用默认设置，不显示错误消息
-      form.setFieldsValue(settings);
+      console.error('获取设置失败:', error);
+      message.error('获取系统设置失败，请检查网络连接');
+      
+      // 使用合理的默认设置
+      const defaultSettings = {
+        systemName: 'SMS转发管理系统',
+        systemDescription: '专业的短信转发和验证码管理平台',
+        systemVersion: '2.0.0',
+        sessionTimeout: 30,
+        maxLoginAttempts: 5,
+        passwordMinLength: 8,
+        enableTwoFactor: false,
+        enableEmailNotification: true,
+        enableSmsNotification: false,
+        notificationEmail: 'admin@example.com',
+        dataRetentionDays: 90,
+        autoBackup: true,
+        backupFrequency: 'daily',
+        theme: 'light',
+        language: 'zh-CN',
+        timezone: 'Asia/Shanghai'
+      };
+      
+      setSettings(defaultSettings);
+      form.setFieldsValue(defaultSettings);
     } finally {
       setInitialLoading(false);
     }
