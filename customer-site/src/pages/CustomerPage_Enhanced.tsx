@@ -905,7 +905,7 @@ const CustomerPage: React.FC = () => {
               flex: '0 0 auto'
             }}
           >
-            <Row gutter={[24, 24]} align="top">
+            <Row gutter={[24, 24]} align="stretch" style={{ minHeight: '200px' }}>
               <Col xs={24} sm={8}>
                 <div style={{ 
                   textAlign: 'center',
@@ -914,7 +914,10 @@ const CustomerPage: React.FC = () => {
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'center',
-                  alignItems: 'center'
+                  alignItems: 'center',
+                  background: '#fafafa',
+                  borderRadius: '8px',
+                  border: '1px solid #f0f0f0'
                 }}>
                   <Avatar
                     size={80}
