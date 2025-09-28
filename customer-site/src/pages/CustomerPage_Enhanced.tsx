@@ -682,16 +682,58 @@ const CustomerPage: React.FC = () => {
           const newCountdown = prev - 1;
           
           if (newCountdown <= 0) {
-            console.log('⏰ 访问会话倒计时结束');
+            console.log('⏰ 访问会话倒计时结束，准备更新访问次数');
             
-            // 倒计时结束，重新开始倒计时（访问次数由后端在get_account_info中自动管理）
-            if (linkInfo?.access_session_interval) {
-              const newCountdownSeconds = linkInfo.access_session_interval * 60;
-              setAccessSessionCountdown(newCountdownSeconds);
-              console.log('🔄 重新开始访问会话倒计时:', newCountdownSeconds, '秒');
-              
-              // 提示用户会话间隔已重置
-              message.info('访问会话间隔已重置，可以继续使用');
+            // 倒计时结束，调用get_account_info API来触发访问次数增加
+            if (currentLinkId) {
+              axios.get(`${API_BASE_URL}/api/get_account_info`, {
+                params: { link_id: currentLinkId }
+              })
+              .then(response => {
+                if (response.data.success) {
+                  const linkData = response.data.data.link_info;
+                  console.log('✅ 访问次数更新成功:', linkData);
+                  
+                  // 更新linkInfo中的访问次数
+                  setLinkInfo(prev => prev ? {
+                    ...prev,
+                    access_count: linkData.access_count
+                  } : null);
+                  
+                  // 检查是否达到访问上限
+                  if (linkData.access_count >= linkData.max_access_count) {
+                    console.log('🚫 访问次数已达上限，跳转到受限状态');
+                    setAccessDenied(true);
+                    message.warning('访问次数已达上限');
+                  } else {
+                    // 重新开始倒计时
+                    if (linkInfo?.access_session_interval) {
+                      const newCountdownSeconds = linkInfo.access_session_interval * 60;
+                      setAccessSessionCountdown(newCountdownSeconds);
+                      console.log('🔄 重新开始访问会话倒计时:', newCountdownSeconds, '秒');
+                    }
+                    
+                    // 提示用户访问次数增加
+                    const percentage = Math.round((linkData.access_count / linkData.max_access_count) * 100);
+                    if (percentage >= 80) {
+                      message.warning(`访问次数已使用 ${percentage}%，请注意访问频率`);
+                    } else {
+                      message.info(`访问次数已更新: ${linkData.access_count}/${linkData.max_access_count}`);
+                    }
+                  }
+                } else {
+                  console.error('❌ 访问次数更新失败:', response.data.message);
+                }
+              })
+              .catch(error => {
+                console.error('❌ 访问次数更新请求失败:', error);
+                // 如果API调用失败，仍然重新开始倒计时
+                if (linkInfo?.access_session_interval) {
+                  const newCountdownSeconds = linkInfo.access_session_interval * 60;
+                  setAccessSessionCountdown(newCountdownSeconds);
+                  console.log('🔄 API失败，仍重新开始访问会话倒计时:', newCountdownSeconds, '秒');
+                }
+              });
             }
             
             return 0;
