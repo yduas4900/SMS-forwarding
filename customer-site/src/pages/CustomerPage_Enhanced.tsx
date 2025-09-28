@@ -72,7 +72,7 @@ interface LinkInfo {
   access_count: number;
   max_access_count: number;
   max_verification_count: number;
-  verification_count?: number;  // 🔥 新增：服务器端的真实验证码获取次数
+  verification_count?: number;
   access_session_interval?: number;
   verification_wait_time?: number;
   created_at: string;
@@ -100,16 +100,15 @@ interface SmsSlot {
 const CustomerPage: React.FC = () => {
   const { linkId } = useParams<{ linkId: string }>();
   const [searchParams] = useSearchParams();
-  // 🔥 支持页面刷新时保持已获取的短信
+  
   const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(() => {
-    // 页面加载时从sessionStorage恢复已获取的短信
     try {
       const savedSms = sessionStorage.getItem('savedVerificationCodes');
       if (savedSms) {
         const parsedSms = JSON.parse(savedSms);
         console.log('🔄 从sessionStorage恢复已获取的短信:', parsedSms);
         return {
-          id: 0, // 临时ID，会在fetchAccountInfo时更新
+          id: 0,
           account_name: '',
           username: '',
           password: '',
@@ -122,17 +121,15 @@ const CustomerPage: React.FC = () => {
     }
     return null;
   });
+  
   const [linkInfo, setLinkInfo] = useState<LinkInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [accessDenied, setAccessDenied] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
-  
-  // 🔥 恢复：访问会话倒计时状态
   const [accessSessionCountdown, setAccessSessionCountdown] = useState<number>(0);
   const accessCountdownRef = useRef<NodeJS.Timeout | null>(null);
   
-  // 🔥 新增：客户端设置状态
   const [customerSettings, setCustomerSettings] = useState<CustomerSiteSettings>({
     customerSiteTitle: '验证码获取服务',
     customerSiteDescription: '安全便捷的验证码获取服务',
@@ -144,15 +141,12 @@ const CustomerPage: React.FC = () => {
     enableCustomerSiteCustomization: true
   });
   
-  // 🔥 新增：渐进式获取短信的状态 - 每条短信独立倒计时
-  // 🔥 支持页面刷新时保持状态
   const [progressiveRetrievalState, setProgressiveRetrievalState] = useState<{
     isActive: boolean;
     totalCount: number;
     smsSlots: SmsSlot[];
     retrievedSmsIds: Set<number>;
   }>(() => {
-    // 页面加载时从sessionStorage恢复状态
     try {
       const savedState = sessionStorage.getItem('progressiveRetrievalState');
       if (savedState) {
@@ -176,11 +170,8 @@ const CustomerPage: React.FC = () => {
   });
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // 获取链接ID（从URL参数或查询参数）
   const currentLinkId = linkId || searchParams.get('link_id');
 
-  // 🔥 新增：获取客户端设置
   const fetchCustomerSettings = async () => {
     try {
       console.log('🎨 开始获取客户端设置...');
@@ -190,12 +181,10 @@ const CustomerPage: React.FC = () => {
         console.log('🎨 成功获取客户端设置:', response.data.data);
         setCustomerSettings(response.data.data);
         
-        // 动态设置页面标题
         if (response.data.data.customerSiteTitle) {
           document.title = response.data.data.customerSiteTitle;
         }
         
-        // 动态应用自定义CSS
         if (response.data.data.customerSiteCustomCSS) {
           const existingStyle = document.getElementById('customer-custom-css');
           if (existingStyle) {
@@ -212,11 +201,9 @@ const CustomerPage: React.FC = () => {
       }
     } catch (error) {
       console.error('❌ 获取客户端设置失败:', error);
-      // 使用默认设置，不影响页面正常显示
     }
   };
 
-  // 获取账号信息
   const fetchAccountInfo = async () => {
     if (!currentLinkId) {
       setError('缺少链接ID参数');
@@ -245,7 +232,6 @@ const CustomerPage: React.FC = () => {
           return;
         }
         
-        // 🔥 合并已保存的短信和新的账号信息
         const savedSms = sessionStorage.getItem('savedVerificationCodes');
         let existingCodes: VerificationCode[] = [];
         
@@ -273,12 +259,10 @@ const CustomerPage: React.FC = () => {
         setError(null);
         setLastRefresh(new Date());
         
-        // 🔥 修复：访问会话倒计时逻辑 - 确保首次访问也能正常显示
         if (linkData.access_session_interval) {
           if (linkData.last_access_time) {
-            // 有访问记录，计算剩余倒计时
             const lastAccessTime = new Date(linkData.last_access_time);
-            const sessionIntervalMs = linkData.access_session_interval * 60 * 1000; // 转换为毫秒
+            const sessionIntervalMs = linkData.access_session_interval * 60 * 1000;
             const elapsedTime = Date.now() - lastAccessTime.getTime();
             const remainingTime = Math.max(0, sessionIntervalMs - elapsedTime);
             const remainingSeconds = Math.ceil(remainingTime / 1000);
@@ -292,7 +276,6 @@ const CustomerPage: React.FC = () => {
             
             setAccessSessionCountdown(remainingSeconds);
           } else {
-            // 首次访问，设置为0（显示间隔信息）
             console.log('🆕 首次访问，显示访问会话间隔信息');
             setAccessSessionCountdown(0);
           }
@@ -320,14 +303,12 @@ const CustomerPage: React.FC = () => {
     }
   };
 
-  // 🔥 开始渐进式获取短信 - 为每条短信创建独立倒计时
   const startProgressiveRetrieval = useCallback(async () => {
     if (!accountInfo || !linkInfo || progressiveRetrievalState.isActive) return;
 
     console.log('🚀 开始渐进式获取短信流程');
     
     try {
-      // 🔥 修复：使用accountInfo.id而不是linkInfo.account_id
       const accountId = accountInfo.id;
       console.log('🔍 使用账号ID:', accountId);
       
@@ -337,7 +318,6 @@ const CustomerPage: React.FC = () => {
         return;
       }
       
-      // 获取短信规则配置
       const rulesResponse = await fetch(`${API_BASE_URL}/api/sms_rules?account_id=${accountId}`, {
         method: 'GET',
         headers: {
@@ -357,8 +337,6 @@ const CustomerPage: React.FC = () => {
 
       const rule = rulesData.data[0];
       const displayCount = rule.display_count || 5;
-      
-      // 🔥 修复：完全使用用户设置的验证码等待时间，不使用任何硬编码默认值
       const waitTime = linkInfo.verification_wait_time;
       
       if (!waitTime) {
@@ -370,17 +348,14 @@ const CustomerPage: React.FC = () => {
       console.log('📊 从数据库获取真实显示条数:', displayCount, '(规则:', rule.rule_name, ')');
       console.log('⏰ 使用用户设置的验证码等待时间:', waitTime, '秒');
 
-      // 🔥 为每条短信创建独立的倒计时槽位 - 完全使用用户设置的时间间隔
-      // 第1条短信：waitTime秒，第2条短信：waitTime*2秒，第3条短信：waitTime*3秒...
       const smsSlots: SmsSlot[] = Array.from({ length: displayCount }, (_, index) => ({
         index: index + 1,
-        countdown: (index + 1) * waitTime, // 递增倒计时：使用用户设置的时间间隔
+        countdown: (index + 1) * waitTime,
         status: 'waiting',
         sms: undefined,
         message: `正在等待第 ${index + 1} 条短信`
       }));
 
-      // 初始化渐进式获取状态
       setProgressiveRetrievalState({
         isActive: true,
         totalCount: displayCount,
@@ -388,11 +363,9 @@ const CustomerPage: React.FC = () => {
         retrievedSmsIds: new Set()
       });
 
-      // 🔥 清空sessionStorage中的旧状态，开始新的获取流程
       sessionStorage.removeItem('progressiveRetrievalState');
       sessionStorage.removeItem('savedVerificationCodes');
 
-      // 清空现有验证码
       setAccountInfo(prev => prev ? {
         ...prev,
         verification_codes: []
@@ -407,7 +380,6 @@ const CustomerPage: React.FC = () => {
     }
   }, [accountInfo, linkInfo, progressiveRetrievalState.isActive]);
 
-  // 🔥 获取指定序号的短信
   const retrieveSpecificSms = useCallback(async (smsIndex: number) => {
     if (!currentLinkId) return;
 
@@ -428,11 +400,9 @@ const CustomerPage: React.FC = () => {
       const data = await response.json();
       console.log(`✅ 第 ${smsIndex} 条短信API响应:`, data);
 
-      // 🔥 实时更新验证码获取次数 - 修复数据结构处理
       console.log('🔍 检查API返回的完整数据结构:', JSON.stringify(data, null, 2));
       
       if (data.success && data.data) {
-        // 检查是否有verification_count字段
         if (data.data.verification_count !== undefined) {
           console.log(`📊 从API获取到验证码次数: ${data.data.verification_count}`);
           setLinkInfo(prev => {
@@ -451,7 +421,6 @@ const CustomerPage: React.FC = () => {
           console.warn('⚠️ API响应中没有verification_count字段');
         }
         
-        // 同时检查max_verification_count
         if (data.data.max_verification_count !== undefined) {
           setLinkInfo(prev => prev ? {
             ...prev,
@@ -461,25 +430,21 @@ const CustomerPage: React.FC = () => {
       }
 
       if (data.success && data.data?.all_matched_sms?.length > 0) {
-        // 过滤掉已经获取过的短信，获取最新的
         const newSms = data.data.all_matched_sms.filter((sms: any) => 
           !progressiveRetrievalState.retrievedSmsIds.has(sms.id)
         );
 
         if (newSms.length > 0) {
-          const latestSms = newSms[0]; // 获取最新的一条
+          const latestSms = newSms[0];
           
-          // 🔥 使用智能识别结果
           let extractedCode = latestSms.content;
           let smartRecognition = null;
           
-          // 检查是否有智能识别结果
           if (data.data.smart_recognition && data.data.smart_recognition.best_code) {
             extractedCode = data.data.smart_recognition.best_code.code;
             smartRecognition = data.data.smart_recognition;
             console.log('🧠 使用智能识别的验证码:', extractedCode, '置信度:', data.data.smart_recognition.best_code.confidence);
           } else {
-            // 回退到本地提取
             extractedCode = extractVerificationCode(latestSms.content) || latestSms.content;
             console.log('🔧 使用本地提取的验证码:', extractedCode);
           }
@@ -495,7 +460,6 @@ const CustomerPage: React.FC = () => {
             smart_recognition: smartRecognition
           };
           
-          // 更新对应槽位的状态
           setProgressiveRetrievalState(prev => ({
             ...prev,
             smsSlots: prev.smsSlots.map(slot => 
@@ -511,7 +475,6 @@ const CustomerPage: React.FC = () => {
             retrievedSmsIds: new Set([...prev.retrievedSmsIds, latestSms.id])
           }));
 
-          // 添加到短信列表
           setAccountInfo(prev => prev ? {
             ...prev,
             verification_codes: [...(prev.verification_codes || []), newCode]
@@ -520,7 +483,6 @@ const CustomerPage: React.FC = () => {
           console.log(`📱 第 ${smsIndex} 条短信获取成功:`, newCode.code);
           message.success(`第 ${smsIndex} 条短信获取成功: ${newCode.code}`);
         } else {
-          // 没有新短信，标记为完成但无内容
           setProgressiveRetrievalState(prev => ({
             ...prev,
             smsSlots: prev.smsSlots.map(slot => 
@@ -536,7 +498,6 @@ const CustomerPage: React.FC = () => {
           console.log(`⚠️ 第 ${smsIndex} 条短信: 没有新的短信`);
         }
       } else {
-        // API失败，标记为完成
         setProgressiveRetrievalState(prev => ({
           ...prev,
           smsSlots: prev.smsSlots.map(slot => 
@@ -553,7 +514,6 @@ const CustomerPage: React.FC = () => {
       }
 
     } catch (error) {
-      // 错误处理，标记为完成
       setProgressiveRetrievalState(prev => ({
         ...prev,
         smsSlots: prev.smsSlots.map(slot => 
@@ -570,7 +530,6 @@ const CustomerPage: React.FC = () => {
     }
   }, [currentLinkId, progressiveRetrievalState.retrievedSmsIds]);
 
-  // 🔥 独立倒计时效果 - 每个短信槽位都有自己的倒计时
   useEffect(() => {
     if (!progressiveRetrievalState.isActive) return;
 
@@ -581,7 +540,6 @@ const CustomerPage: React.FC = () => {
             const newCountdown = slot.countdown - 1;
             
             if (newCountdown <= 0) {
-              // 倒计时结束，开始获取这条短信
               console.log(`⏰ 第${slot.index}条短信倒计时结束，开始获取`);
               retrieveSpecificSms(slot.index);
               return {
@@ -601,7 +559,6 @@ const CustomerPage: React.FC = () => {
           return slot;
         });
 
-        // 检查是否所有短信都已完成
         const allCompleted = updatedSlots.every(slot => slot.status === 'completed');
         
         return {
@@ -615,7 +572,6 @@ const CustomerPage: React.FC = () => {
     return () => clearInterval(timer);
   }, [progressiveRetrievalState.isActive, retrieveSpecificSms]);
 
-  // 提取验证码的辅助函数
   const extractVerificationCode = (content: string): string | null => {
     const patterns = [
       /验证码[：:\s]*(\d{4,8})/,
@@ -635,7 +591,6 @@ const CustomerPage: React.FC = () => {
     return null;
   };
 
-  // 复制到剪贴板
   const copyToClipboard = async (text: string, type: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -646,7 +601,6 @@ const CustomerPage: React.FC = () => {
     }
   };
 
-  // 格式化时间
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleString('zh-CN', {
@@ -659,7 +613,6 @@ const CustomerPage: React.FC = () => {
     });
   };
 
-  // 计算验证码新鲜度
   const getCodeFreshness = (receivedAt: string) => {
     const now = new Date();
     const received = new Date(receivedAt);
@@ -674,7 +627,6 @@ const CustomerPage: React.FC = () => {
     return { text: `${diffHours}小时前`, color: '#ff4d4f' };
   };
 
-  // 🔥 恢复：访问会话倒计时效果
   useEffect(() => {
     if (accessSessionCountdown > 0) {
       accessCountdownRef.current = setInterval(() => {
@@ -684,7 +636,6 @@ const CustomerPage: React.FC = () => {
           if (newCountdown <= 0) {
             console.log('⏰ 访问会话倒计时结束，准备更新访问次数');
             
-            // 倒计时结束，调用get_account_info API来触发访问次数增加
             if (currentLinkId) {
               axios.get(`${API_BASE_URL}/api/get_account_info`, {
                 params: { link_id: currentLinkId }
@@ -694,26 +645,22 @@ const CustomerPage: React.FC = () => {
                   const linkData = response.data.data.link_info;
                   console.log('✅ 访问次数更新成功:', linkData);
                   
-                  // 更新linkInfo中的访问次数
                   setLinkInfo(prev => prev ? {
                     ...prev,
                     access_count: linkData.access_count
                   } : null);
                   
-                  // 检查是否达到访问上限
                   if (linkData.access_count >= linkData.max_access_count) {
                     console.log('🚫 访问次数已达上限，跳转到受限状态');
                     setAccessDenied(true);
                     message.warning('访问次数已达上限');
                   } else {
-                    // 重新开始倒计时
                     if (linkInfo?.access_session_interval) {
                       const newCountdownSeconds = linkInfo.access_session_interval * 60;
                       setAccessSessionCountdown(newCountdownSeconds);
                       console.log('🔄 重新开始访问会话倒计时:', newCountdownSeconds, '秒');
                     }
                     
-                    // 提示用户访问次数增加
                     const percentage = Math.round((linkData.access_count / linkData.max_access_count) * 100);
                     if (percentage >= 80) {
                       message.warning(`访问次数已使用 ${percentage}%，请注意访问频率`);
@@ -727,7 +674,6 @@ const CustomerPage: React.FC = () => {
               })
               .catch(error => {
                 console.error('❌ 访问次数更新请求失败:', error);
-                // 如果API调用失败，仍然重新开始倒计时
                 if (linkInfo?.access_session_interval) {
                   const newCountdownSeconds = linkInfo.access_session_interval * 60;
                   setAccessSessionCountdown(newCountdownSeconds);
@@ -757,7 +703,6 @@ const CustomerPage: React.FC = () => {
     };
   }, [accessSessionCountdown, currentLinkId, linkInfo?.access_session_interval]);
 
-  // 🔥 保存状态到sessionStorage
   useEffect(() => {
     if (progressiveRetrievalState.isActive || progressiveRetrievalState.smsSlots.length > 0) {
       try {
@@ -773,7 +718,6 @@ const CustomerPage: React.FC = () => {
     }
   }, [progressiveRetrievalState]);
 
-  // 🔥 保存已获取的短信到sessionStorage
   useEffect(() => {
     if (accountInfo?.verification_codes && accountInfo.verification_codes.length > 0) {
       try {
@@ -785,7 +729,6 @@ const CustomerPage: React.FC = () => {
     }
   }, [accountInfo?.verification_codes]);
 
-  // 🔥 清空sessionStorage的函数（重新打开页面时调用）
   const clearSessionStorage = useCallback(() => {
     try {
       sessionStorage.removeItem('progressiveRetrievalState');
@@ -796,9 +739,7 @@ const CustomerPage: React.FC = () => {
     }
   }, []);
 
-  // 组件挂载时获取数据
   useEffect(() => {
-    // 🔥 检查是否是重新打开页面（没有保存的状态）
     const hasProgressiveState = sessionStorage.getItem('progressiveRetrievalState');
     const hasSavedSms = sessionStorage.getItem('savedVerificationCodes');
     
@@ -808,7 +749,7 @@ const CustomerPage: React.FC = () => {
     }
     
     fetchAccountInfo();
-    fetchCustomerSettings(); // 🔥 新增：获取客户端设置
+    fetchCustomerSettings();
     
     return () => {
       if (intervalRef.current) {
@@ -817,7 +758,6 @@ const CustomerPage: React.FC = () => {
     };
   }, [currentLinkId, clearSessionStorage]);
 
-  // 在所有return语句中包装ConfigProvider
   if (loading) {
     return (
       <ConfigProvider locale={zhCN}>
@@ -886,7 +826,7 @@ const CustomerPage: React.FC = () => {
           flexDirection: 'column',
           gap: '24px'
         }}>
-          {/* 🔥 新增：客户端欢迎文本 */}
+          {/* 客户端欢迎文本 */}
           {customerSettings.enableCustomerSiteCustomization && customerSettings.customerSiteWelcomeText && (
             <Card
               style={{
@@ -915,7 +855,7 @@ const CustomerPage: React.FC = () => {
               flex: '1 1 auto'
             }}
           >
-            <Row gutter={[24, 24]} align="middle">
+            <Row gutter={[24, 24]} align="stretch">
               <Col xs={24} sm={8} style={{ display: 'flex' }}>
                 <div style={{ 
                   textAlign: 'center',
@@ -924,7 +864,8 @@ const CustomerPage: React.FC = () => {
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'center',
-                  alignItems: 'center'
+                  alignItems: 'center',
+                  minHeight: '200px'
                 }}>
                   <Avatar
                     size={80}
@@ -951,7 +892,8 @@ const CustomerPage: React.FC = () => {
                   width: '100%',
                   display: 'flex',
                   flexDirection: 'column',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  minHeight: '200px'
                 }}>
                   <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                     {/* 用户名 */}
@@ -1005,45 +947,55 @@ const CustomerPage: React.FC = () => {
                 </div>
               </Col>
             </Row>
-=======
           </Card>
+
+          {/* 获取验证码按钮 - 移到独立位置，手机和电脑都明显 */}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center',
+            padding: '16px 0'
+          }}>
+            <Button
+              type="primary"
+              size="large"
+              icon={<CheckCircleOutlined />}
+              onClick={startProgressiveRetrieval}
+              disabled={
+                progressiveRetrievalState.isActive || 
+                (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count)
+              }
+              loading={loading}
+              style={{
+                height: '48px',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                borderRadius: '24px',
+                padding: '0 32px',
+                boxShadow: '0 4px 16px rgba(24, 144, 255, 0.3)',
+                opacity: (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count) ? 0.5 : 1
+              }}
+            >
+              {progressiveRetrievalState.isActive 
+                ? '获取中...' 
+                : (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count)
+                  ? '已达上限'
+                  : '获取验证码'
+              }
+            </Button>
+          </div>
 
           {/* 验证码卡片 */}
           <Card
             title={
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span>
-                  <MobileOutlined style={{ marginRight: 8 }} />
-                  验证码信息
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  {lastRefresh && (
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      最后更新: {formatTime(lastRefresh.toISOString())}
-                    </Text>
-                  )}
-                  <Button
-                    type="primary"
-                    size="small"
-                    icon={<CheckCircleOutlined />}
-                    onClick={startProgressiveRetrieval}
-                    disabled={
-                      progressiveRetrievalState.isActive || 
-                      (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count)
-                    }
-                    loading={loading}
-                    style={{
-                      opacity: (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count) ? 0.5 : 1
-                    }}
-                  >
-                    {progressiveRetrievalState.isActive 
-                      ? '获取中...' 
-                      : (linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count)
-                        ? '已达上限'
-                        : '获取验证码'
-                    }
-                  </Button>
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <MobileOutlined style={{ color: '#1890ff' }} />
+                <Text strong style={{ color: '#1890ff' }}>验证码信息</Text>
+                {lastRefresh && (
+                  <Text type="secondary" style={{ fontSize: 12, marginLeft: 'auto' }}>
+                    最后更新: {formatTime(lastRefresh.toISOString())}
+                  </Text>
+                )}
               </div>
             }
             style={{ 
@@ -1053,7 +1005,7 @@ const CustomerPage: React.FC = () => {
               flex: '0 0 auto'
             }}
           >
-            {/* 🔥 渐进式获取状态显示 - 显示每条短信的独立倒计时 */}
+            {/* 渐进式获取状态显示 */}
             {progressiveRetrievalState.isActive && (
               <div style={{ 
                 marginBottom: '24px',
@@ -1072,7 +1024,6 @@ const CustomerPage: React.FC = () => {
                   📱 正在获取 {progressiveRetrievalState.totalCount} 条短信
                 </div>
                 
-                {/* 显示每条短信的状态 */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {progressiveRetrievalState.smsSlots.map((slot) => (
                     <div 
@@ -1150,14 +1101,13 @@ const CustomerPage: React.FC = () => {
               </div>
             )}
 
-            {/* 短信列表 - 显示完整短信内容 */}
+            {/* 短信列表 */}
             {accountInfo.verification_codes && accountInfo.verification_codes.length > 0 ? (
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 {accountInfo.verification_codes
                   .sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime())
                   .map((sms) => {
                     const freshness = getCodeFreshness(sms.received_at);
-                    // 显示完整短信内容，如果没有full_content则显示code
                     const fullContent = sms.full_content || sms.code;
                     const extractedCode = sms.code;
                     
@@ -1224,7 +1174,7 @@ const CustomerPage: React.FC = () => {
                             </Text>
                           </div>
 
-                          {/* 提取的验证码（如果有） */}
+                          {/* 提取的验证码 */}
                           {extractedCode && extractedCode !== fullContent && (
                             <div style={{
                               padding: '8px 12px',
@@ -1350,7 +1300,7 @@ const CustomerPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* 验证码获取次数统计 - 🔥 修复：使用服务器端的真实次数 */}
+                {/* 验证码获取次数统计 */}
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                     <Text strong style={{ color: '#666' }}>验证码获取次数</Text>
@@ -1408,7 +1358,7 @@ const CustomerPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* 🔥 恢复：访问会话倒计时显示 */}
+                {/* 访问会话倒计时显示 */}
                 {linkInfo.access_session_interval && (
                   <div style={{ 
                     padding: '12px 16px',
@@ -1454,7 +1404,7 @@ const CustomerPage: React.FC = () => {
             </Card>
           )}
 
-          {/* 🔥 新增：客户端页脚文本 */}
+          {/* 客户端页脚文本 */}
           {customerSettings.enableCustomerSiteCustomization && customerSettings.customerSiteFooterText && (
             <Card
               style={{
