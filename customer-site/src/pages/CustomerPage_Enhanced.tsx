@@ -869,7 +869,7 @@ const CustomerPage: React.FC = () => {
         background: customerSettings.enableCustomerSiteCustomization ? customerSettings.customerSiteBackgroundColor : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         padding: '20px'
       }}>
-        <div style={{ maxWidth: 800, margin: '0 auto' }}>
+        <div style={{ maxWidth: 800, margin: '0 auto', width: '100%' }}>
           {/* 🔥 新增：客户端欢迎文本 */}
           {customerSettings.enableCustomerSiteCustomization && customerSettings.customerSiteWelcomeText && (
             <Card
@@ -1170,13 +1170,18 @@ const CustomerPage: React.FC = () => {
                             background: '#f8f9fa',
                             borderRadius: 8,
                             border: '1px solid #e9ecef',
-                            lineHeight: '1.6'
+                            lineHeight: '1.6',
+                            maxWidth: '100%',
+                            overflow: 'hidden'
                           }}>
                             <Text style={{ 
                               fontSize: 14,
                               color: '#333',
-                              wordBreak: 'break-word',
-                              whiteSpace: 'pre-wrap'
+                              wordBreak: 'break-all',
+                              whiteSpace: 'pre-wrap',
+                              display: 'block',
+                              width: '100%',
+                              maxWidth: '100%'
                             }}>
                               {fullContent}
                             </Text>
