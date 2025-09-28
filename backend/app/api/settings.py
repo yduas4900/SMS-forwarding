@@ -22,9 +22,9 @@ router = APIRouter(tags=["系统设置"])
 class SystemSettingsModel(BaseModel):
     """系统设置模型"""
     # 系统基础设置
-    systemName: str = Field(default="手机信息管理系统", description="系统名称")
-    systemDescription: str = Field(default="用于管理手机设备信息、短信记录和账号链接的综合管理平台", description="系统描述")
-    systemVersion: str = Field(default="v1.0.0", description="系统版本")
+    systemName: str = Field(description="系统名称")
+    systemDescription: str = Field(description="系统描述")
+    systemVersion: str = Field(description="系统版本")
     
     # 安全设置
     sessionTimeout: int = Field(default=30, ge=5, le=480, description="会话超时时间（分钟）")
