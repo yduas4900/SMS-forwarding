@@ -877,7 +877,8 @@ const CustomerPage: React.FC = () => {
                 marginBottom: 24,
                 borderRadius: 12,
                 boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-                background: 'rgba(255,255,255,0.95)'
+                background: 'rgba(255,255,255,0.95)',
+                width: '100%'
               }}
             >
               <div
@@ -893,7 +894,8 @@ const CustomerPage: React.FC = () => {
             style={{ 
               marginBottom: 24,
               borderRadius: 12,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+              boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+              width: '100%'
             }}
           >
             <Row gutter={[24, 24]} align="middle">
@@ -1010,7 +1012,8 @@ const CustomerPage: React.FC = () => {
             }
             style={{ 
               borderRadius: 12,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+              boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+              width: '100%'
             }}
           >
             {/* 🔥 渐进式获取状态显示 - 显示每条短信的独立倒计时 */}
@@ -1267,7 +1270,8 @@ const CustomerPage: React.FC = () => {
                 marginTop: 16,
                 borderRadius: 12,
                 background: 'rgba(255,255,255,0.95)',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.1)'
+                boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+                width: '100%'
               }}
             >
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
@@ -1415,7 +1419,8 @@ const CustomerPage: React.FC = () => {
                 marginTop: 24,
                 borderRadius: 12,
                 boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-                background: 'rgba(255,255,255,0.95)'
+                background: 'rgba(255,255,255,0.95)',
+                width: '100%'
               }}
             >
               <div
