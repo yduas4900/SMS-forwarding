@@ -78,6 +78,17 @@ interface LinkInfo {
   created_at: string;
 }
 
+interface CustomerSiteSettings {
+  customerSiteTitle: string;
+  customerSiteDescription: string;
+  customerSiteWelcomeText: string;
+  customerSiteFooterText: string;
+  customerSiteBackgroundColor: string;
+  customerSiteLogoUrl?: string;
+  customerSiteCustomCSS: string;
+  enableCustomerSiteCustomization: boolean;
+}
+
 interface SmsSlot {
   index: number;
   countdown: number;
@@ -117,6 +128,18 @@ const CustomerPage: React.FC = () => {
   const [accessDenied, setAccessDenied] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   
+  // 🔥 新增：客户端设置状态
+  const [customerSettings, setCustomerSettings] = useState<CustomerSiteSettings>({
+    customerSiteTitle: '验证码获取服务',
+    customerSiteDescription: '安全便捷的验证码获取服务',
+    customerSiteWelcomeText: '<h2>欢迎使用验证码获取服务</h2><p>请按照以下步骤获取您的验证码：</p><ol><li>复制用户名和密码</li><li>点击获取验证码按钮</li><li>等待验证码到达</li></ol>',
+    customerSiteFooterText: '<p>如有问题，请联系客服。</p>',
+    customerSiteBackgroundColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    customerSiteLogoUrl: undefined,
+    customerSiteCustomCSS: '',
+    enableCustomerSiteCustomization: true
+  });
+  
   // 🔥 新增：渐进式获取短信的状态 - 每条短信独立倒计时
   // 🔥 支持页面刷新时保持状态
   const [progressiveRetrievalState, setProgressiveRetrievalState] = useState<{
@@ -148,14 +171,46 @@ const CustomerPage: React.FC = () => {
     };
   });
 
-  // 🔥 新增：访问会话间隔倒计时状态
-  const [accessSessionCountdown, setAccessSessionCountdown] = useState<number>(0);
-
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const accessCountdownRef = useRef<NodeJS.Timeout | null>(null);
 
   // 获取链接ID（从URL参数或查询参数）
   const currentLinkId = linkId || searchParams.get('link_id');
+
+  // 🔥 新增：获取客户端设置
+  const fetchCustomerSettings = async () => {
+    try {
+      console.log('🎨 开始获取客户端设置...');
+      const response = await axios.get(`${API_BASE_URL}/api/settings/customer-site/public`);
+      
+      if (response.data.success && response.data.data) {
+        console.log('🎨 成功获取客户端设置:', response.data.data);
+        setCustomerSettings(response.data.data);
+        
+        // 动态设置页面标题
+        if (response.data.data.customerSiteTitle) {
+          document.title = response.data.data.customerSiteTitle;
+        }
+        
+        // 动态应用自定义CSS
+        if (response.data.data.customerSiteCustomCSS) {
+          const existingStyle = document.getElementById('customer-custom-css');
+          if (existingStyle) {
+            existingStyle.remove();
+          }
+          
+          const style = document.createElement('style');
+          style.id = 'customer-custom-css';
+          style.textContent = response.data.data.customerSiteCustomCSS;
+          document.head.appendChild(style);
+        }
+      } else {
+        console.warn('⚠️ 获取客户端设置失败，使用默认设置');
+      }
+    } catch (error) {
+      console.error('❌ 获取客户端设置失败:', error);
+      // 使用默认设置，不影响页面正常显示
+    }
+  };
 
   // 获取账号信息
   const fetchAccountInfo = async () => {
@@ -210,39 +265,9 @@ const CustomerPage: React.FC = () => {
         });
         
         setLinkInfo(linkData);
-        setLastRefresh(new Date());
-
-        // 🔥 关键修复：页面加载时立即检查访问次数是否已达上限
-        if (linkData.access_count >= linkData.max_access_count) {
-          console.log('🚫 页面加载时发现访问次数已达上限，立即跳转到访问受限页面');
-          setAccessDenied(true);
-          setError('此链接的访问次数已达上限，无法继续访问，请联系管理员。');
-          setLoading(false);
-          return; // 停止后续处理
-        }
-
-        // 如果没有达到上限，继续正常流程
         setAccessDenied(false);
         setError(null);
-
-        // 🔥 新增：计算访问会话间隔倒计时
-        if (linkData.last_access_time && linkData.access_session_interval) {
-          const lastAccessTime = new Date(linkData.last_access_time);
-          const sessionIntervalMs = linkData.access_session_interval * 60 * 1000; // 分钟转毫秒
-          const elapsedTime = Date.now() - lastAccessTime.getTime();
-          const remainingTime = Math.max(0, sessionIntervalMs - elapsedTime);
-          const remainingSeconds = Math.ceil(remainingTime / 1000);
-          
-          console.log('⏰ 访问会话间隔倒计时计算:', {
-            lastAccessTime: linkData.last_access_time,
-            sessionInterval: linkData.access_session_interval,
-            elapsedMs: elapsedTime,
-            remainingMs: remainingTime,
-            remainingSeconds
-          });
-
-          setAccessSessionCountdown(remainingSeconds);
-        }
+        setLastRefresh(new Date());
       } else {
         if (response.data.error === 'access_limit_exceeded') {
           setAccessDenied(true);
@@ -659,88 +684,6 @@ const CustomerPage: React.FC = () => {
     }
   }, []);
 
-  // 🔥 新增：访问会话间隔倒计时效果
-  useEffect(() => {
-    if (accessSessionCountdown <= 0) return;
-
-    accessCountdownRef.current = setInterval(() => {
-      setAccessSessionCountdown(prev => {
-        const newCountdown = prev - 1;
-        
-        if (newCountdown <= 0) {
-          console.log('⏰ 访问会话间隔倒计时结束，访问次数即将增加');
-          
-          // 🔥 关键修复：倒计时结束时主动调用API更新访问次数
-          const updateAccessCount = async () => {
-            try {
-              console.log('🔄 倒计时结束，调用API更新访问次数...');
-              const response = await axios.get(`${API_BASE_URL}/api/get_account_info`, {
-                params: { link_id: currentLinkId }
-              });
-
-              if (response.data.success) {
-                const updatedLinkData = response.data.data.link_info;
-                console.log('📊 API返回更新后的访问次数:', updatedLinkData.access_count);
-                
-                // 实时更新linkInfo状态
-                setLinkInfo(prev => prev ? {
-                  ...prev,
-                  access_count: updatedLinkData.access_count,
-                  last_access_time: updatedLinkData.last_access_time
-                } : null);
-
-                // 🔥 关键修复：检查访问次数是否达到上限，如果达到则跳转到访问受限页面
-                if (updatedLinkData.access_count >= updatedLinkData.max_access_count) {
-                  console.log('🚫 访问次数已达上限，立即跳转到访问受限页面');
-                  
-                  // 立即设置访问受限状态
-                  setAccessDenied(true);
-                  setError('此链接的访问次数已达上限，无法继续访问，请联系管理员。');
-                  
-                  // 清除倒计时
-                  setAccessSessionCountdown(0);
-                  if (accessCountdownRef.current) {
-                    clearInterval(accessCountdownRef.current);
-                  }
-                  
-                  return; // 停止后续处理
-                }
-
-                // 重新计算下一次倒计时
-                if (updatedLinkData.last_access_time && updatedLinkData.access_session_interval) {
-                  const newLastAccessTime = new Date(updatedLinkData.last_access_time);
-                  const sessionIntervalMs = updatedLinkData.access_session_interval * 60 * 1000;
-                  const elapsedTime = Date.now() - newLastAccessTime.getTime();
-                  const remainingTime = Math.max(0, sessionIntervalMs - elapsedTime);
-                  const remainingSeconds = Math.ceil(remainingTime / 1000);
-                  
-                  console.log('⏰ 重新计算下一次访问会话倒计时:', remainingSeconds, '秒');
-                  setAccessSessionCountdown(remainingSeconds);
-                }
-              }
-            } catch (error) {
-              console.error('❌ 更新访问次数失败:', error);
-              message.error('更新访问次数失败，请刷新页面查看最新状态');
-            }
-          };
-
-          // 异步更新访问次数
-          updateAccessCount();
-          
-          return 0;
-        }
-        
-        return newCountdown;
-      });
-    }, 1000);
-
-    return () => {
-      if (accessCountdownRef.current) {
-        clearInterval(accessCountdownRef.current);
-      }
-    };
-  }, [accessSessionCountdown, linkInfo, currentLinkId]);
-
   // 组件挂载时获取数据
   useEffect(() => {
     // 🔥 检查是否是重新打开页面（没有保存的状态）
@@ -753,13 +696,11 @@ const CustomerPage: React.FC = () => {
     }
     
     fetchAccountInfo();
+    fetchCustomerSettings(); // 🔥 新增：获取客户端设置
     
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
-      }
-      if (accessCountdownRef.current) {
-        clearInterval(accessCountdownRef.current);
       }
     };
   }, [currentLinkId, clearSessionStorage]);
@@ -822,10 +763,27 @@ const CustomerPage: React.FC = () => {
     <ConfigProvider locale={zhCN}>
       <div className="customer-container" style={{ 
         minHeight: '100vh', 
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: customerSettings.enableCustomerSiteCustomization ? customerSettings.customerSiteBackgroundColor : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         padding: '20px'
       }}>
         <div style={{ maxWidth: 800, margin: '0 auto' }}>
+          {/* 🔥 新增：客户端欢迎文本 */}
+          {customerSettings.enableCustomerSiteCustomization && customerSettings.customerSiteWelcomeText && (
+            <Card
+              style={{
+                marginBottom: 24,
+                borderRadius: 12,
+                boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+                background: 'rgba(255,255,255,0.95)'
+              }}
+            >
+              <div
+                dangerouslySetInnerHTML={{ __html: customerSettings.customerSiteWelcomeText }}
+                style={{ fontSize: 14, color: '#333', lineHeight: '1.6' }}
+              />
+            </Card>
+          )}
+
           {/* 账号信息卡片 */}
           <Card 
             className="customer-card"
@@ -1180,25 +1138,6 @@ const CustomerPage: React.FC = () => {
                       </Card>
                     );
                   })}
-
-                {/* 🔥 验证码获取次数已达上限提示 - 移到短信列表下方 */}
-                {linkInfo && (linkInfo.verification_count || 0) >= linkInfo.max_verification_count && (
-                  <Alert
-                    message="🚫 验证码获取次数已达上限"
-                    description={
-                      <div>
-                        <p style={{ margin: 0, marginBottom: 8 }}>您已达到最大验证码获取次数限制。</p>
-                        <p style={{ margin: 0, color: '#1890ff', fontWeight: 'bold' }}>
-                          📞 如需继续使用，请联系管理员重置次数限制
-                        </p>
-                      </div>
-                    }
-                    type="error"
-                    size="small"
-                    style={{ marginTop: 16 }}
-                    showIcon
-                  />
-                )}
               </Space>
             ) : (
               <div style={{ textAlign: 'center', padding: '40px 0' }}>
@@ -1262,47 +1201,6 @@ const CustomerPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* 🔥 新增：访问会话间隔倒计时 */}
-                {linkInfo.access_session_interval && accessSessionCountdown > 0 && (
-                  <Row justify="space-between" align="middle" style={{ 
-                    padding: '10px 14px',
-                    backgroundColor: 'rgba(250, 173, 20, 0.1)',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(250, 173, 20, 0.2)',
-                    background: 'linear-gradient(135deg, rgba(255, 247, 230, 0.8) 0%, rgba(255, 247, 230, 0.4) 100%)'
-                  }}>
-                    <Col>
-                      <Text style={{ fontSize: 13, fontWeight: '500', color: '#fa8c16' }}>
-                        会话倒计时: {Math.floor(accessSessionCountdown / 60)}分{accessSessionCountdown % 60}秒后访问次数+1
-                      </Text>
-                    </Col>
-                    <Col>
-                      <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '10px',
-                        padding: '4px 8px',
-                        backgroundColor: 'rgba(250, 173, 20, 0.15)',
-                        borderRadius: '6px'
-                      }}>
-                        <ClockCircleOutlined style={{ color: '#fa8c16', fontSize: 16 }} />
-                        <Text 
-                          style={{ 
-                            fontSize: 16, 
-                            fontWeight: 'bold', 
-                            color: '#fa8c16',
-                            fontFamily: 'SF Mono, Monaco, Consolas, monospace',
-                            minWidth: '45px',
-                            textAlign: 'center'
-                          }}
-                        >
-                          {accessSessionCountdown}s
-                        </Text>
-                      </div>
-                    </Col>
-                  </Row>
-                )}
-
                 {/* 验证码获取次数统计 - 🔥 修复：使用服务器端的真实次数 */}
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -1324,6 +1222,23 @@ const CustomerPage: React.FC = () => {
                     }
                     trailColor="#f0f0f0"
                   />
+                  {(linkInfo.verification_count || 0) >= linkInfo.max_verification_count && (
+                    <Alert
+                      message="🚫 验证码获取次数已达上限"
+                      description={
+                        <div>
+                          <p style={{ margin: 0, marginBottom: 8 }}>您已达到最大验证码获取次数限制。</p>
+                          <p style={{ margin: 0, color: '#1890ff', fontWeight: 'bold' }}>
+                            📞 如需继续使用，请联系管理员重置次数限制
+                          </p>
+                        </div>
+                      }
+                      type="error"
+                      size="small"
+                      style={{ marginTop: 8 }}
+                      showIcon
+                    />
+                  )}
                 </div>
 
                 {/* 验证码等待时间配置 */}
@@ -1362,6 +1277,23 @@ const CustomerPage: React.FC = () => {
                   </div>
                 )}
               </Space>
+            </Card>
+          )}
+
+          {/* 🔥 新增：客户端页脚文本 */}
+          {customerSettings.enableCustomerSiteCustomization && customerSettings.customerSiteFooterText && (
+            <Card
+              style={{
+                marginTop: 24,
+                borderRadius: 12,
+                boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+                background: 'rgba(255,255,255,0.95)'
+              }}
+            >
+              <div
+                dangerouslySetInnerHTML={{ __html: customerSettings.customerSiteFooterText }}
+                style={{ fontSize: 12, color: '#666', textAlign: 'center', lineHeight: '1.6' }}
+              />
             </Card>
           )}
         </div>
