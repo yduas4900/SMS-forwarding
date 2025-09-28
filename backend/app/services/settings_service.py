@@ -158,7 +158,28 @@ class SettingsService:
                 # 系统基础设置
                 "systemName": ("SMS转发管理系统", "string", "系统名称"),
                 "systemDescription": ("专业的短信转发和验证码管理平台，支持多设备接入、智能验证码识别和客户端自定义设置", "string", "系统描述"),
-                "systemVersion": ("v2.0.0", "string", "系统版本"),
+                "systemVersion": ("2.0.0", "string", "系统版本"),
+                
+                # 安全设置
+                "sessionTimeout": (30, "integer", "会话超时时间（分钟）"),
+                "maxLoginAttempts": (5, "integer", "最大登录尝试次数"),
+                "passwordMinLength": (8, "integer", "密码最小长度"),
+                "enableTwoFactor": (False, "boolean", "启用双因素认证"),
+                
+                # 通知设置
+                "enableEmailNotification": (True, "boolean", "启用邮件通知"),
+                "enableSmsNotification": (False, "boolean", "启用短信通知"),
+                "notificationEmail": ("admin@example.com", "string", "通知邮箱"),
+                
+                # 数据设置
+                "dataRetentionDays": (90, "integer", "数据保留天数"),
+                "autoBackup": (True, "boolean", "启用自动备份"),
+                "backupFrequency": ("daily", "string", "备份频率"),
+                
+                # 界面设置
+                "theme": ("light", "string", "主题"),
+                "language": ("zh-CN", "string", "语言"),
+                "timezone": ("Asia/Shanghai", "string", "时区"),
                 
                 # 客户端设置
                 "customerSiteTitle": ("验证码获取服务", "string", "客户端页面标题"),
