@@ -905,111 +905,97 @@ const CustomerPage: React.FC = () => {
               flex: '0 0 auto'
             }}
           >
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 2fr',
-              gap: '24px',
-              minHeight: '300px',
-              '@media (max-width: 768px)': {
-                gridTemplateColumns: '1fr',
-                gap: '16px'
-              }
-            }}>
-              {/* 左侧用户信息区域 */}
-              <div style={{ 
-                textAlign: 'center',
-                padding: '32px 20px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                alignItems: 'center',
-                background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
-                borderRadius: '12px',
-                border: '2px solid #e1e8ed',
-                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)'
-              }}>
-                <Avatar
-                  size={100}
-                  src={accountInfo.avatar_url ? (
-                    accountInfo.avatar_url.startsWith('http') 
-                      ? accountInfo.avatar_url 
-                      : `${API_BASE_URL}${accountInfo.avatar_url}`
-                  ) : undefined}
-                  icon={<UserOutlined />}
-                  style={{ 
-                    marginBottom: 20,
-                    border: '3px solid #fff',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                  }}
-                />
-                <Title level={3} style={{ margin: 0, color: '#1890ff', fontWeight: 'bold' }}>
-                  {accountInfo.account_name}
-                </Title>
-                <Tag color="blue" size="large" style={{ marginTop: 12, fontSize: '14px', padding: '4px 12px' }}>
-                  {accountInfo.service_type}
-                </Tag>
-              </div>
+            <Row gutter={[24, 24]} align="middle">
+              <Col xs={24} sm={8} style={{ display: 'flex' }}>
+                <div style={{ 
+                  textAlign: 'center',
+                  padding: '24px 16px',
+                  width: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  alignItems: 'center'
+                }}>
+                  <Avatar
+                    size={80}
+                    src={accountInfo.avatar_url ? (
+                      accountInfo.avatar_url.startsWith('http') 
+                        ? accountInfo.avatar_url 
+                        : `${API_BASE_URL}${accountInfo.avatar_url}`
+                    ) : undefined}
+                    icon={<UserOutlined />}
+                    style={{ marginBottom: 16 }}
+                  />
+                  <Title level={4} style={{ margin: 0, color: '#1890ff' }}>
+                    {accountInfo.account_name}
+                  </Title>
+                  <Tag color="blue" style={{ marginTop: 8 }}>
+                    {accountInfo.service_type}
+                  </Tag>
+                </div>
+              </Col>
               
-              {/* 右侧账号信息区域 */}
-              <div style={{ 
-                padding: '32px 20px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center'
-              }}>
-                <Space direction="vertical" size="large" style={{ width: '100%' }}>
-                  {/* 用户名 */}
-                  <div>
-                    <Text strong style={{ color: '#666', fontSize: '16px', marginBottom: '8px', display: 'block' }}>用户名</Text>
-                    <div style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      padding: '12px 16px',
-                      background: '#f8f9fa',
-                      borderRadius: 8,
-                      border: '2px solid #e9ecef',
-                      minHeight: '50px'
-                    }}>
-                      <Text copyable={{ text: accountInfo.username }} style={{ flex: 1, fontSize: '16px', fontWeight: '500' }}>
-                        {accountInfo.username}
-                      </Text>
-                      <Button
-                        type="text"
-                        icon={<CopyOutlined />}
-                        size="middle"
-                        onClick={() => copyToClipboard(accountInfo.username, '用户名')}
-                        style={{ marginLeft: '8px' }}
-                      />
+              <Col xs={24} sm={16} style={{ display: 'flex' }}>
+                <div style={{ 
+                  padding: '24px 16px',
+                  width: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center'
+                }}>
+                  <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                    {/* 用户名 */}
+                    <div>
+                      <Text strong style={{ color: '#666' }}>用户名</Text>
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        marginTop: 4,
+                        padding: '8px 12px',
+                        background: '#f5f5f5',
+                        borderRadius: 6,
+                        border: '1px solid #d9d9d9'
+                      }}>
+                        <Text copyable={{ text: accountInfo.username }} style={{ flex: 1 }}>
+                          {accountInfo.username}
+                        </Text>
+                        <Button
+                          type="text"
+                          icon={<CopyOutlined />}
+                          size="small"
+                          onClick={() => copyToClipboard(accountInfo.username, '用户名')}
+                        />
+                      </div>
                     </div>
-                  </div>
-                  
-                  {/* 密码 */}
-                  <div>
-                    <Text strong style={{ color: '#666', fontSize: '16px', marginBottom: '8px', display: 'block' }}>密码</Text>
-                    <div style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      padding: '12px 16px',
-                      background: '#f8f9fa',
-                      borderRadius: 8,
-                      border: '2px solid #e9ecef',
-                      minHeight: '50px'
-                    }}>
-                      <Text copyable={{ text: accountInfo.password }} style={{ flex: 1, fontSize: '16px', fontWeight: '500' }}>
-                        {accountInfo.password}
-                      </Text>
-                      <Button
-                        type="text"
-                        icon={<CopyOutlined />}
-                        size="middle"
-                        onClick={() => copyToClipboard(accountInfo.password, '密码')}
-                        style={{ marginLeft: '8px' }}
-                      />
+                    
+                    {/* 密码 */}
+                    <div>
+                      <Text strong style={{ color: '#666' }}>密码</Text>
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        marginTop: 4,
+                        padding: '8px 12px',
+                        background: '#f5f5f5',
+                        borderRadius: 6,
+                        border: '1px solid #d9d9d9'
+                      }}>
+                        <Text copyable={{ text: accountInfo.password }} style={{ flex: 1 }}>
+                          {accountInfo.password}
+                        </Text>
+                        <Button
+                          type="text"
+                          icon={<CopyOutlined />}
+                          size="small"
+                          onClick={() => copyToClipboard(accountInfo.password, '密码')}
+                        />
+                      </div>
                     </div>
-                  </div>
-                </Space>
-              </div>
-            </div>
+                  </Space>
+                </div>
+              </Col>
+            </Row>
+=======
           </Card>
 
           {/* 验证码卡片 */}
