@@ -424,6 +424,51 @@ async def update_customer_site_settings(
             detail="更新客户端页面设置失败"
         )
 
+@router.get("/public", response_model=dict)
+async def get_system_settings_public(db: Session = Depends(get_db)):
+    """
+    获取系统基础设置（公开API，无需认证）
+    Get basic system settings (public API, no authentication required)
+    """
+    try:
+        logger.info("公开API获取系统基础设置")
+        
+        # 强制重新初始化默认设置，确保所有设置都存在
+        SettingsService.initialize_default_settings(db)
+        
+        # 从数据库获取基础系统设置
+        settings = SettingsService.get_all_settings(db)
+        
+        # 只返回公开的基础设置，不包含敏感信息
+        public_settings = {
+            "systemName": settings.get("systemName", "系统管理"),
+            "systemDescription": settings.get("systemDescription", "管理员登录"),
+            "systemVersion": settings.get("systemVersion", "1.0.0")
+        }
+        
+        logger.info(f"返回公开设置数据: {public_settings}")
+        
+        return {
+            "success": True,
+            "message": "获取系统基础设置成功",
+            "data": public_settings
+        }
+        
+    except Exception as e:
+        logger.error(f"公开API获取系统基础设置失败: {str(e)}")
+        # 返回默认设置而不是错误，确保登录页面始终能正常工作
+        default_settings = {
+            "systemName": "系统管理",
+            "systemDescription": "管理员登录",
+            "systemVersion": "1.0.0"
+        }
+        
+        return {
+            "success": True,
+            "message": "使用默认系统基础设置",
+            "data": default_settings
+        }
+
 @router.get("/customer-site/public", response_model=dict)
 async def get_customer_site_settings_public_new(db: Session = Depends(get_db)):
     """

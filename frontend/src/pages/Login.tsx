@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form, Input, Button, Card, message, Typography } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import './Login.css';
 
 const { Title } = Typography;
@@ -12,10 +13,40 @@ interface LoginForm {
   password: string;
 }
 
+interface SystemSettings {
+  systemName: string;
+  systemDescription: string;
+  systemVersion: string;
+}
+
 const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  // 获取系统设置（无需认证）
+  useEffect(() => {
+    const fetchSystemSettings = async () => {
+      try {
+        // 尝试获取公开的系统设置
+        const response = await axios.get('/api/settings/public');
+        if (response.data.success) {
+          setSystemSettings(response.data.data);
+        }
+      } catch (error) {
+        console.log('获取系统设置失败，使用默认值');
+        // 使用默认值
+        setSystemSettings({
+          systemName: '系统管理',
+          systemDescription: '管理员登录',
+          systemVersion: '1.0.0'
+        });
+      }
+    };
+    
+    fetchSystemSettings();
+  }, []);
 
   const onFinish = async (values: LoginForm) => {
     setLoading(true);
@@ -45,8 +76,8 @@ const Login: React.FC = () => {
     <div className="login-container">
       <Card className="login-card">
         <div className="login-header">
-          <Title level={2}>手机信息管理系统</Title>
-          <p>管理员登录</p>
+          <Title level={2}>{systemSettings?.systemName || '系统管理'}</Title>
+          <p>{systemSettings?.systemDescription || '管理员登录'}</p>
         </div>
         
         <Form
@@ -94,7 +125,7 @@ const Login: React.FC = () => {
         </Form>
         
         <div className="login-footer">
-          <p>手机信息管理系统 v1.0.0</p>
+          <p>{systemSettings?.systemName || '系统管理'} {systemSettings?.systemVersion || 'v1.0.0'}</p>
         </div>
       </Card>
     </div>

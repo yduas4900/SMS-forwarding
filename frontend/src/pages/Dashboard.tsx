@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout, Menu, Avatar, Dropdown, Typography, theme } from 'antd';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -13,6 +13,7 @@ import {
   MenuUnfoldOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
+import axios from 'axios';
 
 // 导入页面组件
 import Overview from './dashboard/Overview';
@@ -27,11 +28,38 @@ import Settings from './dashboard/Settings';
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
 
+interface SystemSettings {
+  systemName: string;
+  systemDescription: string;
+  systemVersion: string;
+}
+
 const Dashboard: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // 获取系统设置
+  useEffect(() => {
+    const fetchSystemSettings = async () => {
+      try {
+        const response = await axios.get('/api/settings/public');
+        if (response.data.success) {
+          setSystemSettings(response.data.data);
+        }
+      } catch (error) {
+        console.log('获取系统设置失败，使用默认值');
+        setSystemSettings({
+          systemName: '系统管理',
+          systemDescription: '管理员登录',
+          systemVersion: '1.0.0'
+        });
+      }
+    };
+    fetchSystemSettings();
+  }, []);
   
   // 修复theme.useToken()的null检查
   const { token } = theme.useToken();
@@ -137,7 +165,7 @@ const Dashboard: React.FC = () => {
           borderBottom: '1px solid #f0f0f0'
         }}>
           <Title level={4} style={{ margin: 0, color: '#1890ff' }}>
-            {collapsed ? '手机' : '手机信息管理系统'}
+            {collapsed ? '系统' : (systemSettings?.systemName || '系统管理')}
           </Title>
         </div>
         
