@@ -71,9 +71,9 @@ const Settings: React.FC = () => {
   const [customerLoading, setCustomerLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [settings, setSettings] = useState<SystemSettings>({
-    systemName: '手机信息管理系统',
-    systemDescription: '用于管理手机设备信息、短信记录和账号链接的综合管理平台',
-    systemVersion: 'v1.0.0',
+    systemName: '',
+    systemDescription: '',
+    systemVersion: '',
     
     sessionTimeout: 30,
     maxLoginAttempts: 5,
@@ -230,8 +230,9 @@ const Settings: React.FC = () => {
           <Form.Item
             name="systemVersion"
             label="系统版本"
+            rules={[{ required: true, message: '请输入系统版本' }]}
           >
-            <Input disabled />
+            <Input />
           </Form.Item>
         </Col>
       </Row>
