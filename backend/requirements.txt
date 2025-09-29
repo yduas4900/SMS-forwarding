@@ -13,5 +13,3 @@ Pillow==10.1.0
 aiofiles==23.2.1
 pydantic-settings==2.0.3
 # 🔐 双因素认证依赖
-pyotp==2.9.0
-qrcode[pil]==7.4.2
