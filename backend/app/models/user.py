@@ -32,6 +32,11 @@ class User(Base):
     last_login = Column(DateTime(timezone=True), comment="最后登录时间")
     login_count = Column(Integer, default=0, comment="登录次数")
     
+    # 登录安全
+    failed_login_attempts = Column(Integer, default=0, comment="连续登录失败次数")
+    locked_until = Column(DateTime(timezone=True), comment="账户锁定到期时间")
+    last_failed_login = Column(DateTime(timezone=True), comment="最后一次登录失败时间")
+    
     # 时间戳
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), comment="更新时间")

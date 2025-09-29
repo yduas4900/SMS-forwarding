@@ -230,10 +230,30 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
                 detail="用户名或密码错误"
             )
         
+        # 检查账户是否被锁定
+        current_time = datetime.now(timezone.utc)
+        if user.locked_until and user.locked_until > current_time:
+            remaining_minutes = int((user.locked_until - current_time).total_seconds() / 60)
+            logger.warning(f"账户被锁定: {request.username}, 剩余时间: {remaining_minutes}分钟")
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail=f"账户已被锁定，请在 {remaining_minutes} 分钟后重试"
+            )
+        
+        # 如果锁定时间已过，重置失败计数
+        if user.locked_until and user.locked_until <= current_time:
+            user.failed_login_attempts = 0
+            user.locked_until = None
+            logger.info(f"账户锁定已过期，重置失败计数: {request.username}")
+        
         logger.info(f"找到用户: {user.username}, 验证密码...")
         
         if not verify_password(request.password, user.hashed_password):
             logger.warning(f"密码验证失败: {request.username}")
+            
+            # 处理登录失败
+            await handle_login_failure(user, db)
+            
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="用户名或密码错误"
@@ -245,6 +265,11 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="用户账号已被禁用"
             )
+        
+        # 登录成功，重置失败计数
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        user.last_failed_login = None
         
         # 更新登录信息
         user.last_login = datetime.now(timezone.utc)
@@ -276,6 +301,39 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="登录过程中发生错误"
         )
+
+
+async def handle_login_failure(user: User, db: Session):
+    """处理登录失败"""
+    try:
+        # 获取最大登录尝试次数设置
+        max_attempts = 5  # 默认值
+        try:
+            max_attempts = SettingsService.get_setting(db, "maxLoginAttempts", 5)
+            logger.info(f"使用数据库中的最大登录尝试次数: {max_attempts}")
+        except Exception as e:
+            logger.warning(f"获取最大登录尝试次数设置失败，使用默认值: {e}")
+        
+        # 增加失败计数
+        if user.failed_login_attempts is None:
+            user.failed_login_attempts = 0
+        user.failed_login_attempts += 1
+        user.last_failed_login = datetime.now(timezone.utc)
+        
+        logger.warning(f"用户 {user.username} 登录失败，当前失败次数: {user.failed_login_attempts}/{max_attempts}")
+        
+        # 检查是否需要锁定账户
+        if user.failed_login_attempts >= max_attempts:
+            # 锁定账户30分钟
+            lock_duration_minutes = 30
+            user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=lock_duration_minutes)
+            logger.warning(f"用户 {user.username} 达到最大失败次数，锁定 {lock_duration_minutes} 分钟")
+        
+        db.commit()
+        
+    except Exception as e:
+        logger.error(f"处理登录失败时出错: {e}")
+        db.rollback()
 
 
 @router.get("/me")
