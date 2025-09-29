@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .config import settings
 from .database import init_database, get_db
-from .api import auth, devices, accounts, sms, links, websocket_routes, service_types, customer, images, android_client
+from .api import auth, devices, accounts, sms, links, websocket_routes, service_types, customer, images, android_client, admin
 from .api import settings as settings_api
 
 # 配置日志
@@ -134,6 +134,7 @@ try:
     app.include_router(customer.router, prefix="/api", tags=["客户端访问"])
     app.include_router(images.router, prefix="/api", tags=["图片管理"])
     app.include_router(android_client.router, prefix="/api/android", tags=["Android客户端"])
+    app.include_router(admin.router, prefix="/api/admin", tags=["管理员工具"])
     logger.info("✅ 所有API路由注册完成")
 except Exception as e:
     logger.error(f"❌ API路由注册失败: {e}")
