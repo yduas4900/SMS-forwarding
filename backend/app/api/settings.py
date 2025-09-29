@@ -27,7 +27,7 @@ class SystemSettingsModel(BaseModel):
     systemVersion: Optional[str] = Field(default="2.0.0", description="系统版本")
     
     # 安全设置
-    sessionTimeout: Optional[int] = Field(default=30, ge=5, le=480, description="会话超时时间（分钟）")
+    sessionTimeout: Optional[int] = Field(default=30, ge=1, le=480, description="会话超时时间（分钟）")
     maxLoginAttempts: Optional[int] = Field(default=5, ge=3, le=10, description="最大登录尝试次数")
     passwordMinLength: Optional[int] = Field(default=8, ge=6, le=20, description="密码最小长度")
     enableTwoFactor: Optional[bool] = Field(default=False, description="启用双因素认证")
