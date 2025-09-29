@@ -25,6 +25,8 @@ from ..config import settings
 from ..websocket import manager
 from ..services.settings_service import SettingsService
 
+logger = logging.getLogger(__name__)
+
 # 🚨 临时修复：优雅处理TOTP服务导入失败
 try:
     from ..services.totp_service import TOTPService
@@ -51,8 +53,6 @@ except ImportError as e:
         @staticmethod
         def generate_backup_codes(*args, **kwargs):
             raise HTTPException(status_code=500, detail="TOTP服务不可用，请安装pyotp依赖")
-
-logger = logging.getLogger(__name__)
 router = APIRouter()
 security = HTTPBearer()
 
