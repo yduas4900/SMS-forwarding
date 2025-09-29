@@ -230,21 +230,21 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
                 detail="用户名或密码错误"
             )
         
-        # 检查账户是否被锁定（安全检查，防止字段不存在）
-        current_time = datetime.now(timezone.utc)
-        if hasattr(user, 'locked_until') and user.locked_until and user.locked_until > current_time:
-            remaining_minutes = int((user.locked_until - current_time).total_seconds() / 60)
-            logger.warning(f"账户被锁定: {request.username}, 剩余时间: {remaining_minutes}分钟")
-            raise HTTPException(
-                status_code=status.HTTP_423_LOCKED,
-                detail=f"账户已被锁定，请在 {remaining_minutes} 分钟后重试"
-            )
+        # 临时移除账户锁定检查，等待数据库迁移完成
+        # current_time = datetime.now(timezone.utc)
+        # if hasattr(user, 'locked_until') and user.locked_until and user.locked_until > current_time:
+        #     remaining_minutes = int((user.locked_until - current_time).total_seconds() / 60)
+        #     logger.warning(f"账户被锁定: {request.username}, 剩余时间: {remaining_minutes}分钟")
+        #     raise HTTPException(
+        #         status_code=status.HTTP_423_LOCKED,
+        #         detail=f"账户已被锁定，请在 {remaining_minutes} 分钟后重试"
+        #     )
         
-        # 如果锁定时间已过，重置失败计数（安全检查）
-        if hasattr(user, 'locked_until') and hasattr(user, 'failed_login_attempts') and user.locked_until and user.locked_until <= current_time:
-            user.failed_login_attempts = 0
-            user.locked_until = None
-            logger.info(f"账户锁定已过期，重置失败计数: {request.username}")
+        # 临时移除失败计数重置，等待数据库迁移完成
+        # if hasattr(user, 'locked_until') and hasattr(user, 'failed_login_attempts') and user.locked_until and user.locked_until <= current_time:
+        #     user.failed_login_attempts = 0
+        #     user.locked_until = None
+        #     logger.info(f"账户锁定已过期，重置失败计数: {request.username}")
         
         logger.info(f"找到用户: {user.username}, 验证密码...")
         
@@ -266,13 +266,13 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
                 detail="用户账号已被禁用"
             )
         
-        # 登录成功，重置失败计数（安全检查）
-        if hasattr(user, 'failed_login_attempts'):
-            user.failed_login_attempts = 0
-        if hasattr(user, 'locked_until'):
-            user.locked_until = None
-        if hasattr(user, 'last_failed_login'):
-            user.last_failed_login = None
+        # 临时移除登录成功时的字段重置，等待数据库迁移完成
+        # if hasattr(user, 'failed_login_attempts'):
+        #     user.failed_login_attempts = 0
+        # if hasattr(user, 'locked_until'):
+        #     user.locked_until = None
+        # if hasattr(user, 'last_failed_login'):
+        #     user.last_failed_login = None
         
         # 更新登录信息
         user.last_login = datetime.now(timezone.utc)
