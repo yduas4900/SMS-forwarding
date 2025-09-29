@@ -191,17 +191,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return true;
     } catch (error: any) {
       console.error('❌ AuthContext登录失败:', error);
+      console.error('❌ 错误详情:', error.response);
       
       // 清理可能的残留数据
       localStorage.removeItem('token');
       setToken(null);
       setUser(null);
       
-      const errorMessage = error.response?.data?.detail || 
-                          error.response?.data?.message || 
-                          error.message || 
-                          '登录失败，请检查用户名和密码';
+      // 🚨 安全修复：正确处理后端返回的详细错误信息
+      let errorMessage = '登录失败，请检查用户名和密码';
       
+      if (error.response?.data?.detail) {
+        // 后端返回的详细错误信息（包含剩余尝试次数、锁定信息等）
+        errorMessage = error.response.data.detail;
+        console.log('🔐 使用后端详细错误信息:', errorMessage);
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // 🚨 重要：将详细的错误信息抛出，让Login组件能够显示
       throw new Error(errorMessage);
     }
   };
