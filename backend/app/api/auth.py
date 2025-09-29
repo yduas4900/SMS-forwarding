@@ -24,7 +24,33 @@ from ..models.user import User
 from ..config import settings
 from ..websocket import manager
 from ..services.settings_service import SettingsService
-from ..services.totp_service import TOTPService
+
+# 🚨 临时修复：优雅处理TOTP服务导入失败
+try:
+    from ..services.totp_service import TOTPService
+    TOTP_AVAILABLE = True
+    logger.info("🔐 TOTP服务导入成功")
+except ImportError as e:
+    logger.warning(f"🔐 TOTP服务导入失败，2FA功能将被禁用: {e}")
+    TOTP_AVAILABLE = False
+    
+    # 创建一个临时的TOTPService类以避免错误
+    class TOTPService:
+        @staticmethod
+        def generate_secret():
+            raise HTTPException(status_code=500, detail="TOTP服务不可用，请安装pyotp依赖")
+        
+        @staticmethod
+        def generate_qr_code(*args, **kwargs):
+            raise HTTPException(status_code=500, detail="TOTP服务不可用，请安装qrcode依赖")
+        
+        @staticmethod
+        def verify_token(*args, **kwargs):
+            raise HTTPException(status_code=500, detail="TOTP服务不可用，请安装pyotp依赖")
+        
+        @staticmethod
+        def generate_backup_codes(*args, **kwargs):
+            raise HTTPException(status_code=500, detail="TOTP服务不可用，请安装pyotp依赖")
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -1056,6 +1082,13 @@ async def setup_two_factor(
     """
     try:
         logger.info(f"🔐 用户 {current_user.username} 开始设置2FA")
+        
+        # 🚨 检查TOTP服务是否可用
+        if not TOTP_AVAILABLE:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="双因素认证服务暂时不可用，请联系管理员安装相关依赖"
+            )
         
         # 验证当前密码
         if not verify_password(request.password, current_user.hashed_password):
