@@ -29,6 +29,7 @@ class SystemSettingsModel(BaseModel):
     # 安全设置
     sessionTimeout: Optional[int] = Field(default=30, ge=1, le=480, description="会话超时时间（分钟）")
     maxLoginAttempts: Optional[int] = Field(default=5, ge=3, le=10, description="最大登录尝试次数")
+    loginLockDuration: Optional[int] = Field(default=30, ge=1, le=120, description="登录错误锁定时间（分钟）")
     passwordMinLength: Optional[int] = Field(default=8, ge=6, le=20, description="密码最小长度")
     enableTwoFactor: Optional[bool] = Field(default=False, description="启用双因素认证")
     
@@ -184,6 +185,7 @@ async def update_settings(
             "systemVersion": "string",
             "sessionTimeout": "integer",
             "maxLoginAttempts": "integer",
+            "loginLockDuration": "integer",
             "passwordMinLength": "integer",
             "enableTwoFactor": "boolean",
             "enableLoginCaptcha": "boolean",

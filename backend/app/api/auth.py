@@ -258,10 +258,17 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
         user.login_count += 1
         db.commit()
         
-        # 创建访问令牌 - 使用默认超时时间，避免数据库查询问题
+        # 🚨 修复：使用数据库中的会话超时时间设置
+        try:
+            session_timeout = SettingsService.get_setting(db, "sessionTimeout", 30)
+            logger.info(f"使用数据库中的会话超时时间: {session_timeout} 分钟")
+        except Exception as e:
+            logger.warning(f"获取会话超时设置失败，使用默认值30分钟: {e}")
+            session_timeout = 30
+        
         access_token = create_access_token(
             data={"sub": user.username},
-            expires_delta=timedelta(minutes=30)  # 使用固定30分钟，避免数据库查询
+            expires_delta=timedelta(minutes=session_timeout)
         )
         
         logger.info(f"管理员登录成功: {user.username}")
@@ -310,10 +317,16 @@ async def handle_login_failure(user: User, db: Session):
         
         logger.warning(f"用户 {user.username} 登录失败，当前失败次数: {user.failed_login_attempts}/{max_attempts}")
         
-        # 检查是否需要锁定账户
+        # 🚨 修复：检查是否需要锁定账户，使用数据库设置
         if user.failed_login_attempts >= max_attempts and hasattr(user, 'locked_until'):
-            # 锁定账户30分钟
-            lock_duration_minutes = 30
+            # 🚨 修复：使用数据库中的锁定时间设置，而不是硬编码
+            try:
+                lock_duration_minutes = SettingsService.get_setting(db, "loginLockDuration", 30)
+                logger.info(f"使用数据库中的登录锁定时间: {lock_duration_minutes} 分钟")
+            except Exception as e:
+                logger.warning(f"获取登录锁定时间设置失败，使用默认值30分钟: {e}")
+                lock_duration_minutes = 30
+            
             user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=lock_duration_minutes)
             logger.warning(f"用户 {user.username} 达到最大失败次数，锁定 {lock_duration_minutes} 分钟")
         
@@ -890,10 +903,17 @@ async def login_admin_with_captcha(request: LoginWithCaptchaRequest, db: Session
         
         db.commit()
         
-        # 创建访问令牌
+        # 🚨 修复：使用数据库中的会话超时时间设置
+        try:
+            session_timeout = SettingsService.get_setting(db, "sessionTimeout", 30)
+            logger.info(f"带验证码登录使用数据库中的会话超时时间: {session_timeout} 分钟")
+        except Exception as e:
+            logger.warning(f"获取会话超时设置失败，使用默认值30分钟: {e}")
+            session_timeout = 30
+        
         access_token = create_access_token(
             data={"sub": user.username},
-            expires_delta=timedelta(minutes=30)
+            expires_delta=timedelta(minutes=session_timeout)
         )
         
         logger.info(f"🔐 带验证码登录成功: {user.username}")
