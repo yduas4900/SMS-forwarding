@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Button, Card, message, Typography, Row, Col } from 'antd';
+import { Form, Input, Button, Card, Typography, Row, Col, App, message } from 'antd';
 import { UserOutlined, LockOutlined, SafetyOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -7,6 +7,7 @@ import axios from 'axios';
 import './Login.css';
 
 const { Title } = Typography;
+const { useApp } = App;
 
 interface LoginForm {
   username: string;
@@ -42,6 +43,7 @@ const Login: React.FC = () => {
   const [captchaLoading, setCaptchaLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const { message } = useApp();
 
   // 获取系统设置（无需认证）
   useEffect(() => {
@@ -219,7 +221,101 @@ const Login: React.FC = () => {
           console.error('❌ 普通登录异常:', loginError);
           const errorMessage = loginError.message || '登录失败，请检查用户名和密码';
           console.log('🔐 显示错误消息给用户:', errorMessage);
-          message.error(errorMessage);
+          
+          // 🚨 终极修复：确保用户100%能看到错误提示
+          console.log('🔐 开始显示错误提示给用户:', errorMessage);
+          
+          // 方案1：立即显示原生alert（最可靠）
+          alert(`🚨 登录失败：${errorMessage}`);
+          console.log('🔐 Alert弹窗已显示');
+          
+          // 方案2：创建超大红色错误提示框
+          const errorDiv = document.createElement('div');
+          errorDiv.id = 'login-error-display';
+          errorDiv.style.cssText = `
+            position: fixed !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            background: #ff4d4f !important;
+            color: white !important;
+            padding: 20px 30px !important;
+            border-radius: 8px !important;
+            z-index: 99999 !important;
+            font-size: 16px !important;
+            font-weight: bold !important;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3) !important;
+            border: 3px solid #d9363e !important;
+            max-width: 400px !important;
+            text-align: center !important;
+            cursor: pointer !important;
+          `;
+          errorDiv.innerHTML = `
+            <div style="margin-bottom: 10px; font-size: 18px;">⚠️ 登录失败</div>
+            <div style="margin-bottom: 15px;">${errorMessage}</div>
+            <div style="font-size: 12px; opacity: 0.8;">点击此处关闭</div>
+          `;
+          
+          // 移除之前的错误提示
+          const existingError = document.getElementById('login-error-display');
+          if (existingError) {
+            existingError.remove();
+          }
+          
+          document.body.appendChild(errorDiv);
+          console.log('🔐 大型错误提示框已显示');
+          
+          // 点击关闭
+          errorDiv.onclick = () => {
+            errorDiv.remove();
+            console.log('🔐 用户点击关闭错误提示');
+          };
+          
+          // 10秒后自动移除
+          setTimeout(() => {
+            if (errorDiv.parentNode) {
+              errorDiv.remove();
+              console.log('🔐 错误提示自动移除');
+            }
+          }, 10000);
+          
+          // 方案3：尝试使用message组件
+          try {
+            message.error(errorMessage);
+            console.log('🔐 Message组件也已调用');
+          } catch (msgError) {
+            console.error('Message组件错误:', msgError);
+          }
+          
+          // 方案4：在登录表单下方显示错误文本
+          const loginCard = document.querySelector('.login-card');
+          if (loginCard) {
+            let errorText = loginCard.querySelector('.login-error-text');
+            if (!errorText) {
+              errorText = document.createElement('div');
+              errorText.className = 'login-error-text';
+              errorText.style.cssText = `
+                background: #fff2f0;
+                border: 1px solid #ffccc7;
+                color: #ff4d4f;
+                padding: 12px;
+                margin-top: 16px;
+                border-radius: 6px;
+                text-align: center;
+                font-weight: 500;
+              `;
+              loginCard.appendChild(errorText);
+            }
+            errorText.textContent = `❌ ${errorMessage}`;
+            console.log('🔐 登录卡片错误文本已显示');
+            
+            // 5秒后移除
+            setTimeout(() => {
+              if (errorText && errorText.parentNode) {
+                errorText.remove();
+              }
+            }, 8000);
+          }
         }
       }
     } catch (error: any) {

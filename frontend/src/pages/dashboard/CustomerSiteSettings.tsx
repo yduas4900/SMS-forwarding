@@ -588,13 +588,6 @@ const CustomerSiteSettings: React.FC = () => {
             <Input placeholder="例如：linear-gradient(135deg, #667eea 0%, #764ba2 100%)" />
           </Form.Item>
 
-          <Form.Item
-            name="customerSiteLogoUrl"
-            label="Logo URL"
-            extra="客户端页面Logo图片的URL地址"
-          >
-            <Input placeholder="例如：https://example.com/logo.png" />
-          </Form.Item>
 
           <Form.Item
             name="customerSiteCustomCSS"
