@@ -45,17 +45,17 @@ class User(Base):
         return f"<User(username='{self.username}', email='{self.email}')>"
     
     def to_dict(self):
-        """转换为字典格式 (不包含密码)"""
+        """转换为字典格式 (不包含密码) - 安全处理不存在的字段"""
         return {
-            "id": self.id,
-            "username": self.username,
-            "email": self.email,
-            "is_active": self.is_active,
-            "is_superuser": self.is_superuser,
-            "full_name": self.full_name,
+            "id": getattr(self, 'id', None),
+            "username": getattr(self, 'username', None),
+            "email": getattr(self, 'email', None),
+            "is_active": getattr(self, 'is_active', True),
+            "is_superuser": getattr(self, 'is_superuser', False),
+            "full_name": getattr(self, 'full_name', None),
             "phone": getattr(self, 'phone', None),
-            "last_login": self.last_login.isoformat() if getattr(self, 'last_login', None) else None,
+            "last_login": getattr(self, 'last_login', None).isoformat() if getattr(self, 'last_login', None) else None,
             "login_count": getattr(self, 'login_count', 0),
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+            "created_at": getattr(self, 'created_at', None).isoformat() if getattr(self, 'created_at', None) else None,
+            "updated_at": getattr(self, 'updated_at', None).isoformat() if getattr(self, 'updated_at', None) else None
         }
