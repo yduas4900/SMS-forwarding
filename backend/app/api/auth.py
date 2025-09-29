@@ -674,16 +674,24 @@ async def login_admin_with_captcha(request: LoginWithCaptchaRequest, db: Session
     Admin login with captcha
     """
     try:
-        logger.info(f"带验证码登录尝试: {request.username}")
+        logger.info(f"🔐 带验证码登录尝试: {request.username}")
+        logger.info(f"🔐 收到的验证码ID: {request.captcha_id}")
+        logger.info(f"🔐 收到的验证码: {request.captcha_code}")
         
         # 检查是否启用验证码
         enable_captcha = SettingsService.get_setting(db, "enableLoginCaptcha", False)
+        logger.info(f"🔐 验证码启用状态: {enable_captcha}")
+        
         if not enable_captcha:
+            logger.info("🔐 验证码未启用，回退到普通登录")
             # 如果未启用验证码，回退到普通登录
             return await login_admin(LoginRequest(username=request.username, password=request.password), db)
         
         # 验证验证码
+        logger.info(f"🔐 当前验证码存储: {list(captcha_store.keys())}")
+        
         if request.captcha_id not in captcha_store:
+            logger.error(f"🔐 验证码ID不存在: {request.captcha_id}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="验证码已过期或不存在"
@@ -692,8 +700,14 @@ async def login_admin_with_captcha(request: LoginWithCaptchaRequest, db: Session
         stored_captcha = captcha_store[request.captcha_id]
         current_time = datetime.now(timezone.utc)
         
+        logger.info(f"🔐 存储的验证码: {stored_captcha['code']}")
+        logger.info(f"🔐 输入的验证码: {request.captcha_code.upper()}")
+        logger.info(f"🔐 验证码过期时间: {stored_captcha['expires_at']}")
+        logger.info(f"🔐 当前时间: {current_time}")
+        
         # 检查验证码是否过期
         if current_time > stored_captcha["expires_at"]:
+            logger.error(f"🔐 验证码已过期")
             del captcha_store[request.captcha_id]
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -702,22 +716,25 @@ async def login_admin_with_captcha(request: LoginWithCaptchaRequest, db: Session
         
         # 验证验证码是否正确
         if request.captcha_code.upper() != stored_captcha["code"]:
+            logger.error(f"🔐 验证码错误: 输入'{request.captcha_code.upper()}' != 存储'{stored_captcha['code']}'")
             # 验证码错误，但不删除，允许重试
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="验证码错误"
             )
         
+        logger.info("🔐 验证码验证成功！")
         # 验证码正确，删除已使用的验证码
         del captcha_store[request.captcha_id]
         
         # 执行正常的登录流程
+        logger.info("🔐 开始执行正常登录流程")
         return await login_admin(LoginRequest(username=request.username, password=request.password), db)
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"带验证码登录失败: {str(e)}")
+        logger.error(f"🔐 带验证码登录异常: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="登录过程中发生错误"
