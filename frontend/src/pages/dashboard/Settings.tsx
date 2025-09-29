@@ -301,7 +301,7 @@ const Settings: React.FC = () => {
             label="会话超时时间（分钟）"
             rules={[{ required: true, message: '请输入会话超时时间' }]}
           >
-            <InputNumber min={5} max={480} style={{ width: '100%' }} />
+            <InputNumber min={1} max={480} style={{ width: '100%' }} />
           </Form.Item>
         </Col>
         <Col span={8}>
