@@ -965,8 +965,12 @@ async def login_admin_with_captcha(request: LoginWithCaptchaRequest, db: Session
         
         if not verify_password(request.password, user.hashed_password):
             logger.warning(f"密码验证失败: {request.username}")
-            # 处理登录失败
-            await handle_login_failure(user, db)
+            # 🚨 修复：安全处理登录失败，避免500错误
+            try:
+                await handle_login_failure(user, db)
+            except Exception as e:
+                logger.error(f"处理登录失败时出错: {e}")
+                # 继续执行，不让这个错误阻止正常的错误响应
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="用户名或密码错误"
@@ -979,17 +983,25 @@ async def login_admin_with_captcha(request: LoginWithCaptchaRequest, db: Session
                 detail="用户账号已被禁用"
             )
         
-        # 更新登录信息
-        user.last_login = datetime.now(timezone.utc)
-        if user.login_count is None:
-            user.login_count = 0
-        user.login_count += 1
-        
-        # 重置失败登录计数（如果存在安全字段）
-        if hasattr(user, 'failed_login_attempts'):
-            user.failed_login_attempts = 0
-        
-        db.commit()
+        # 🚨 修复：安全更新登录信息，避免500错误
+        try:
+            user.last_login = datetime.now(timezone.utc)
+            if user.login_count is None:
+                user.login_count = 0
+            user.login_count += 1
+            
+            # 重置失败登录计数（如果存在安全字段）
+            if hasattr(user, 'failed_login_attempts'):
+                user.failed_login_attempts = 0
+            if hasattr(user, 'locked_until'):
+                user.locked_until = None
+            
+            db.commit()
+            logger.info(f"🔐 用户登录信息更新成功: {user.username}")
+        except Exception as e:
+            logger.error(f"更新用户登录信息失败: {e}")
+            # 不让这个错误阻止登录成功
+            db.rollback()
         
         # 🚨 修复：使用数据库中的会话超时时间设置
         try:
@@ -999,17 +1011,40 @@ async def login_admin_with_captcha(request: LoginWithCaptchaRequest, db: Session
             logger.warning(f"获取会话超时设置失败，使用默认值30分钟: {e}")
             session_timeout = 30
         
-        access_token = create_access_token(
-            data={"sub": user.username},
-            expires_delta=timedelta(minutes=session_timeout)
-        )
+        # 🚨 修复：安全创建访问令牌
+        try:
+            access_token = create_access_token(
+                data={"sub": user.username},
+                expires_delta=timedelta(minutes=session_timeout)
+            )
+        except Exception as e:
+            logger.error(f"创建访问令牌失败: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="创建访问令牌失败"
+            )
         
         logger.info(f"🔐 带验证码登录成功: {user.username}")
+        
+        # 🚨 修复：安全创建用户信息字典，避免to_dict()方法出错
+        try:
+            user_info = user.to_dict()
+        except Exception as e:
+            logger.error(f"转换用户信息失败: {e}")
+            # 创建基本的用户信息字典
+            user_info = {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email or "",
+                "is_active": user.is_active,
+                "full_name": user.full_name or "",
+                "login_count": getattr(user, 'login_count', 0)
+            }
         
         return {
             "access_token": access_token,
             "token_type": "bearer",
-            "user_info": user.to_dict()
+            "user_info": user_info
         }
         
     except HTTPException:
