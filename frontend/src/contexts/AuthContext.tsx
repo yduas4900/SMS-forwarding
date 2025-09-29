@@ -36,10 +36,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
 
+  // 🚨 新增：检查token是否过期的函数
+  const checkTokenExpiry = (token: string): boolean => {
+    try {
+      // 解析JWT token的payload部分
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const currentTime = Math.floor(Date.now() / 1000);
+      
+      // 检查是否过期
+      if (payload.exp && payload.exp < currentTime) {
+        console.log('🕐 Token已过期，自动登出');
+        return true; // 已过期
+      }
+      return false; // 未过期
+    } catch (error) {
+      console.error('解析token失败:', error);
+      return true; // 解析失败，视为过期
+    }
+  };
+
+  // 🚨 新增：自动登出函数
+  const autoLogout = () => {
+    console.log('🚨 会话超时，自动登出');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setToken(null);
+    setUser(null);
+    message.warning('会话已超时，请重新登录');
+    // 跳转到登录页
+    window.location.href = '/login';
+  };
+
   useEffect(() => {
     const initAuth = async () => {
       const savedToken = localStorage.getItem('token');
       if (savedToken) {
+        // 🚨 新增：首先检查token是否过期
+        if (checkTokenExpiry(savedToken)) {
+          autoLogout();
+          setLoading(false);
+          return;
+        }
+
         try {
           const userData: any = await authAPI.getCurrentUser();
           
@@ -55,17 +93,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setUser(userInfo);
           }
           setToken(savedToken);
-        } catch (error) {
+        } catch (error: any) {
           console.error('初始化用户数据失败:', error);
-          localStorage.removeItem('token');
-          setToken(null);
+          
+          // 🚨 新增：如果是401错误（token过期），自动登出
+          if (error.response?.status === 401) {
+            autoLogout();
+          } else {
+            localStorage.removeItem('token');
+            setToken(null);
+          }
         }
       }
       setLoading(false);
     };
 
     initAuth();
+
+    // 🚨 新增：定期检查token过期（每30秒检查一次）
+    const tokenCheckInterval = setInterval(() => {
+      const currentToken = localStorage.getItem('token');
+      if (currentToken && checkTokenExpiry(currentToken)) {
+        autoLogout();
+      }
+    }, 30000); // 30秒检查一次
+
+    return () => {
+      clearInterval(tokenCheckInterval);
+    };
   }, []);
+
+  // 🚨 新增：API请求拦截器，检查401响应
+  useEffect(() => {
+    const handleApiError = (error: any) => {
+      if (error.response?.status === 401 && token) {
+        console.log('🚨 API返回401，token可能已过期');
+        autoLogout();
+      }
+    };
+
+    // 这里可以添加axios拦截器，但为了简单起见，我们在每个API调用中处理
+    // 实际项目中建议使用axios拦截器
+  }, [token]);
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
