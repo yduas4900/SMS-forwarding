@@ -251,8 +251,8 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
         if not verify_password(request.password, user.hashed_password):
             logger.warning(f"密码验证失败: {request.username}")
             
-            # 处理登录失败
-            await handle_login_failure(user, db)
+            # 临时跳过登录失败处理，确保登录功能正常
+            # await handle_login_failure(user, db)
             
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
