@@ -145,20 +145,64 @@ const Login: React.FC = () => {
     setLoading(true);
     try {
       console.log('🔐 Login页面开始登录:', values.username);
-      const success = await login(values.username, values.password);
-      console.log('🔐 Login页面登录结果:', success);
+      console.log('🔐 验证码设置状态:', captchaSettings);
+      console.log('🔐 验证码数据:', captchaData);
       
-      if (success) {
-        message.success('登录成功！');
-        console.log('🔐 Login页面跳转到dashboard');
-        navigate('/dashboard');
+      // 如果启用了验证码，使用带验证码的登录API
+      if (captchaSettings.enableLoginCaptcha && captchaData) {
+        console.log('🔐 使用带验证码的登录API');
+        
+        if (!values.captcha) {
+          message.error('请输入验证码！');
+          setLoading(false);
+          return;
+        }
+        
+        // 调用带验证码的登录API
+        const response = await axios.post('/api/auth/login-with-captcha', {
+          username: values.username,
+          password: values.password,
+          captcha_id: captchaData.captcha_id,
+          captcha_code: values.captcha
+        });
+        
+        if (response.data.access_token) {
+          // 保存token到localStorage
+          localStorage.setItem('token', response.data.access_token);
+          localStorage.setItem('user', JSON.stringify(response.data.user_info));
+          
+          message.success('登录成功！');
+          console.log('🔐 Login页面跳转到dashboard');
+          navigate('/dashboard');
+        } else {
+          message.error('登录失败，请检查用户名、密码和验证码');
+          // 刷新验证码
+          fetchCaptchaDirectly();
+        }
       } else {
-        console.error('❌ Login页面登录失败: 返回false');
-        message.error('登录失败，请检查用户名和密码');
+        console.log('🔐 使用普通登录API');
+        // 使用普通登录
+        const success = await login(values.username, values.password);
+        console.log('🔐 Login页面登录结果:', success);
+        
+        if (success) {
+          message.success('登录成功！');
+          console.log('🔐 Login页面跳转到dashboard');
+          navigate('/dashboard');
+        } else {
+          console.error('❌ Login页面登录失败: 返回false');
+          message.error('登录失败，请检查用户名和密码');
+        }
       }
     } catch (error: any) {
       console.error('❌ Login页面登录异常:', error);
-      const errorMessage = error.message || '登录失败，请检查用户名和密码';
+      
+      // 如果是验证码相关错误，刷新验证码
+      if (captchaSettings.enableLoginCaptcha && captchaData) {
+        fetchCaptchaDirectly();
+      }
+      
+      const errorMessage = error.response?.data?.detail || error.message || '登录失败，请检查用户名、密码和验证码';
       message.error(errorMessage);
     } finally {
       setLoading(false);
