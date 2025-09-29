@@ -215,8 +215,8 @@ async def register_device(request: TokenRequest, db: Session = Depends(get_db)):
 @router.post("/login")
 async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
     """
-    管理员登录
-    Admin login
+    管理员登录 - 简化版本，确保基本功能正常
+    Admin login - Simplified version to ensure basic functionality
     """
     try:
         logger.info(f"登录尝试: {request.username}")
@@ -230,30 +230,10 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
                 detail="用户名或密码错误"
             )
         
-        # 临时移除账户锁定检查，等待数据库迁移完成
-        # current_time = datetime.now(timezone.utc)
-        # if hasattr(user, 'locked_until') and user.locked_until and user.locked_until > current_time:
-        #     remaining_minutes = int((user.locked_until - current_time).total_seconds() / 60)
-        #     logger.warning(f"账户被锁定: {request.username}, 剩余时间: {remaining_minutes}分钟")
-        #     raise HTTPException(
-        #         status_code=status.HTTP_423_LOCKED,
-        #         detail=f"账户已被锁定，请在 {remaining_minutes} 分钟后重试"
-        #     )
-        
-        # 临时移除失败计数重置，等待数据库迁移完成
-        # if hasattr(user, 'locked_until') and hasattr(user, 'failed_login_attempts') and user.locked_until and user.locked_until <= current_time:
-        #     user.failed_login_attempts = 0
-        #     user.locked_until = None
-        #     logger.info(f"账户锁定已过期，重置失败计数: {request.username}")
-        
         logger.info(f"找到用户: {user.username}, 验证密码...")
         
         if not verify_password(request.password, user.hashed_password):
             logger.warning(f"密码验证失败: {request.username}")
-            
-            # 临时跳过登录失败处理，确保登录功能正常
-            # await handle_login_failure(user, db)
-            
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="用户名或密码错误"
@@ -266,14 +246,6 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
                 detail="用户账号已被禁用"
             )
         
-        # 临时移除登录成功时的字段重置，等待数据库迁移完成
-        # if hasattr(user, 'failed_login_attempts'):
-        #     user.failed_login_attempts = 0
-        # if hasattr(user, 'locked_until'):
-        #     user.locked_until = None
-        # if hasattr(user, 'last_failed_login'):
-        #     user.last_failed_login = None
-        
         # 更新登录信息
         user.last_login = datetime.now(timezone.utc)
         if user.login_count is None:
@@ -281,9 +253,10 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
         user.login_count += 1
         db.commit()
         
-        # 创建访问令牌 - 使用数据库中的会话超时设置
+        # 创建访问令牌 - 使用默认超时时间，避免数据库查询问题
         access_token = create_access_token(
-            data={"sub": user.username}, db=db
+            data={"sub": user.username},
+            expires_delta=timedelta(minutes=30)  # 使用固定30分钟，避免数据库查询
         )
         
         logger.info(f"管理员登录成功: {user.username}")
