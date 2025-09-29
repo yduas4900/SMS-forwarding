@@ -147,6 +147,7 @@ const Login: React.FC = () => {
       console.log('🔐 Login页面开始登录:', values.username);
       console.log('🔐 验证码设置状态:', captchaSettings);
       console.log('🔐 验证码数据:', captchaData);
+      console.log('🔐 强制部署标记: v2.0.1');
       
       // 如果启用了验证码，使用带验证码的登录API
       if (captchaSettings.enableLoginCaptcha && captchaData) {
