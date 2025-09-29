@@ -147,24 +147,42 @@ const Login: React.FC = () => {
       console.log('🔐 Login页面开始登录:', values.username);
       console.log('🔐 验证码设置状态:', captchaSettings);
       console.log('🔐 验证码数据:', captchaData);
-      console.log('🔐 强制部署标记: v2.0.1');
+      console.log('🔐 安全修复版本: v2.0.2');
       
-      // 如果启用了验证码，使用带验证码的登录API
-      if (captchaSettings.enableLoginCaptcha && captchaData) {
-        console.log('🔐 使用带验证码的登录API');
+      // 🚨 安全修复：强制检查验证码状态，不允许绕过
+      if (captchaSettings.enableLoginCaptcha) {
+        console.log('🔐 验证码已启用，必须使用带验证码的登录API');
         
-        if (!values.captcha) {
+        // 🚨 安全检查：确保验证码数据存在
+        if (!captchaData || !captchaData.captcha_id) {
+          message.error('验证码数据异常，请刷新页面重试！');
+          setLoading(false);
+          return;
+        }
+        
+        // 🚨 安全检查：确保用户输入了验证码
+        if (!values.captcha || values.captcha.trim() === '') {
           message.error('请输入验证码！');
           setLoading(false);
           return;
         }
+        
+        // 🚨 安全检查：验证码长度检查
+        const expectedLength = captchaSettings.captchaLength || 4;
+        if (values.captcha.length !== expectedLength) {
+          message.error(`验证码长度应为${expectedLength}位！`);
+          setLoading(false);
+          return;
+        }
+        
+        console.log('🔐 所有验证码检查通过，调用带验证码的登录API');
         
         // 调用带验证码的登录API
         const response = await axios.post('/api/auth/login-with-captcha', {
           username: values.username,
           password: values.password,
           captcha_id: captchaData.captcha_id,
-          captcha_code: values.captcha
+          captcha_code: values.captcha.trim().toUpperCase()
         });
         
         if (response.data.access_token) {
@@ -172,9 +190,8 @@ const Login: React.FC = () => {
           localStorage.setItem('token', response.data.access_token);
           localStorage.setItem('user', JSON.stringify(response.data.user_info));
           
-          // 强制刷新页面以更新AuthContext状态
           message.success('登录成功！');
-          console.log('🔐 Login页面跳转到dashboard');
+          console.log('🔐 带验证码登录成功，跳转到dashboard');
           window.location.href = '/dashboard';
         } else {
           message.error('登录失败，请检查用户名、密码和验证码');
@@ -182,30 +199,46 @@ const Login: React.FC = () => {
           fetchCaptchaDirectly();
         }
       } else {
-        console.log('🔐 使用普通登录API');
-        // 使用普通登录
+        console.log('🔐 验证码未启用，使用普通登录API');
+        
+        // 🚨 安全修复：当验证码未启用时，确保不会意外调用验证码API
         const success = await login(values.username, values.password);
-        console.log('🔐 Login页面登录结果:', success);
+        console.log('🔐 普通登录结果:', success);
         
         if (success) {
           message.success('登录成功！');
-          console.log('🔐 Login页面跳转到dashboard');
+          console.log('🔐 普通登录成功，跳转到dashboard');
           navigate('/dashboard');
         } else {
-          console.error('❌ Login页面登录失败: 返回false');
+          console.error('❌ 普通登录失败');
           message.error('登录失败，请检查用户名和密码');
         }
       }
     } catch (error: any) {
       console.error('❌ Login页面登录异常:', error);
       
-      // 如果是验证码相关错误，刷新验证码
-      if (captchaSettings.enableLoginCaptcha && captchaData) {
-        fetchCaptchaDirectly();
+      // 🚨 安全修复：更详细的错误处理
+      if (captchaSettings.enableLoginCaptcha) {
+        // 验证码启用时的错误处理
+        if (error.response?.status === 400) {
+          const errorDetail = error.response?.data?.detail || '';
+          if (errorDetail.includes('验证码')) {
+            message.error(errorDetail);
+            // 刷新验证码
+            fetchCaptchaDirectly();
+          } else {
+            message.error('登录失败：' + errorDetail);
+          }
+        } else {
+          message.error('登录过程中发生错误，请重试');
+          // 刷新验证码
+          fetchCaptchaDirectly();
+        }
+      } else {
+        // 普通登录的错误处理
+        const errorMessage = error.response?.data?.detail || error.message || '登录失败，请检查用户名和密码';
+        message.error(errorMessage);
       }
-      
-      const errorMessage = error.response?.data?.detail || error.message || '登录失败，请检查用户名、密码和验证码';
-      message.error(errorMessage);
     } finally {
       setLoading(false);
     }

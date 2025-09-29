@@ -670,24 +670,26 @@ async def get_captcha(db: Session = Depends(get_db)):
 @router.post("/login-with-captcha")
 async def login_admin_with_captcha(request: LoginWithCaptchaRequest, db: Session = Depends(get_db)):
     """
-    带验证码的管理员登录
-    Admin login with captcha
+    带验证码的管理员登录 - 安全修复版本
+    Admin login with captcha - Security fixed version
     """
     try:
         logger.info(f"🔐 带验证码登录尝试: {request.username}")
         logger.info(f"🔐 收到的验证码ID: {request.captcha_id}")
         logger.info(f"🔐 收到的验证码: {request.captcha_code}")
         
-        # 检查是否启用验证码
+        # 🚨 安全修复：检查是否启用验证码
         enable_captcha = SettingsService.get_setting(db, "enableLoginCaptcha", False)
         logger.info(f"🔐 验证码启用状态: {enable_captcha}")
         
         if not enable_captcha:
-            logger.info("🔐 验证码未启用，回退到普通登录")
-            # 如果未启用验证码，回退到普通登录
-            return await login_admin(LoginRequest(username=request.username, password=request.password), db)
+            logger.error("🔐 验证码未启用，拒绝带验证码的登录请求")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="验证码功能未启用"
+            )
         
-        # 验证验证码
+        # 🚨 安全修复：强制验证验证码，不允许绕过
         logger.info(f"🔐 当前验证码存储: {list(captcha_store.keys())}")
         
         if request.captcha_id not in captcha_store:
@@ -705,7 +707,7 @@ async def login_admin_with_captcha(request: LoginWithCaptchaRequest, db: Session
         logger.info(f"🔐 验证码过期时间: {stored_captcha['expires_at']}")
         logger.info(f"🔐 当前时间: {current_time}")
         
-        # 检查验证码是否过期
+        # 🚨 安全修复：检查验证码是否过期
         if current_time > stored_captcha["expires_at"]:
             logger.error(f"🔐 验证码已过期")
             del captcha_store[request.captcha_id]
@@ -714,10 +716,10 @@ async def login_admin_with_captcha(request: LoginWithCaptchaRequest, db: Session
                 detail="验证码已过期"
             )
         
-        # 验证验证码是否正确
+        # 🚨 安全修复：严格验证验证码是否正确
         if request.captcha_code.upper() != stored_captcha["code"]:
             logger.error(f"🔐 验证码错误: 输入'{request.captcha_code.upper()}' != 存储'{stored_captcha['code']}'")
-            # 验证码错误，但不删除，允许重试
+            # 🚨 关键修复：验证码错误时直接返回错误，不继续执行登录
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="验证码错误"
@@ -727,9 +729,61 @@ async def login_admin_with_captcha(request: LoginWithCaptchaRequest, db: Session
         # 验证码正确，删除已使用的验证码
         del captcha_store[request.captcha_id]
         
-        # 执行正常的登录流程
-        logger.info("🔐 开始执行正常登录流程")
-        return await login_admin(LoginRequest(username=request.username, password=request.password), db)
+        # 🚨 安全修复：只有验证码验证成功后才执行用户名密码验证
+        logger.info("🔐 验证码验证通过，开始执行用户名密码验证")
+        
+        # 手动执行用户名密码验证，而不是调用login_admin函数
+        user = db.query(User).filter(User.username == request.username).first()
+        
+        if not user:
+            logger.warning(f"用户不存在: {request.username}")
+            # 处理登录失败
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户名或密码错误"
+            )
+        
+        if not verify_password(request.password, user.hashed_password):
+            logger.warning(f"密码验证失败: {request.username}")
+            # 处理登录失败
+            await handle_login_failure(user, db)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户名或密码错误"
+            )
+        
+        if not user.is_active:
+            logger.warning(f"用户账号已被禁用: {request.username}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户账号已被禁用"
+            )
+        
+        # 更新登录信息
+        user.last_login = datetime.now(timezone.utc)
+        if user.login_count is None:
+            user.login_count = 0
+        user.login_count += 1
+        
+        # 重置失败登录计数（如果存在安全字段）
+        if hasattr(user, 'failed_login_attempts'):
+            user.failed_login_attempts = 0
+        
+        db.commit()
+        
+        # 创建访问令牌
+        access_token = create_access_token(
+            data={"sub": user.username},
+            expires_delta=timedelta(minutes=30)
+        )
+        
+        logger.info(f"🔐 带验证码登录成功: {user.username}")
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user_info": user.to_dict()
+        }
         
     except HTTPException:
         raise
