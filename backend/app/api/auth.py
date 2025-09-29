@@ -24,6 +24,7 @@ from ..models.user import User
 from ..config import settings
 from ..websocket import manager
 from ..services.settings_service import SettingsService
+from ..services.totp_service import TOTPService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -1020,3 +1021,306 @@ async def get_captcha_settings(db: Session = Depends(get_db)):
                 "enableLoginCaptcha": False
             }
         }
+
+
+# 🔐 双因素认证相关API
+class TwoFactorSetupRequest(BaseModel):
+    """2FA设置请求"""
+    password: str  # 需要当前密码确认
+
+class TwoFactorVerifyRequest(BaseModel):
+    """2FA验证请求"""
+    totp_code: str
+
+class TwoFactorLoginRequest(BaseModel):
+    """2FA登录请求"""
+    username: str
+    password: str
+    totp_code: str
+    captcha_id: str = None
+    captcha_code: str = None
+
+class BackupCodeRequest(BaseModel):
+    """备用码请求"""
+    backup_code: str
+
+@router.post("/2fa/setup")
+async def setup_two_factor(
+    request: TwoFactorSetupRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    设置双因素认证
+    Setup Two-Factor Authentication
+    """
+    try:
+        logger.info(f"🔐 用户 {current_user.username} 开始设置2FA")
+        
+        # 验证当前密码
+        if not verify_password(request.password, current_user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="当前密码错误"
+            )
+        
+        # 检查是否已启用2FA
+        if hasattr(current_user, 'totp_enabled') and current_user.totp_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="双因素认证已启用"
+            )
+        
+        # 生成TOTP密钥
+        secret = TOTPService.generate_secret()
+        
+        # 获取发行者名称
+        issuer_name = SettingsService.get_setting(db, "twoFactorIssuerName", "SMS转发系统")
+        
+        # 生成QR码
+        qr_code = TOTPService.generate_qr_code(secret, current_user.username, issuer_name)
+        
+        # 生成备用恢复码
+        backup_codes_count = SettingsService.get_setting(db, "twoFactorBackupCodesCount", 10)
+        backup_codes = TOTPService.generate_backup_codes(backup_codes_count)
+        
+        # 暂时存储密钥（等待用户验证）
+        if not hasattr(current_user, 'totp_secret'):
+            logger.warning("用户表缺少2FA字段，请先运行数据库迁移")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="系统尚未支持双因素认证，请联系管理员"
+            )
+        
+        current_user.totp_secret = secret
+        current_user.set_backup_codes(backup_codes)
+        # 注意：此时还不启用2FA，需要用户验证后才启用
+        db.commit()
+        
+        logger.info(f"🔐 用户 {current_user.username} 2FA密钥生成成功")
+        
+        return {
+            "success": True,
+            "message": "2FA设置准备完成，请使用Google Authenticator扫描二维码",
+            "data": {
+                "qr_code": qr_code,
+                "secret": secret,  # 也提供文本密钥供手动输入
+                "backup_codes": backup_codes,
+                "issuer": issuer_name
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"设置2FA失败: {str(e)}")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="设置双因素认证失败"
+        )
+
+@router.post("/2fa/verify-setup")
+async def verify_two_factor_setup(
+    request: TwoFactorVerifyRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    验证并启用双因素认证
+    Verify and enable Two-Factor Authentication
+    """
+    try:
+        logger.info(f"🔐 用户 {current_user.username} 验证2FA设置")
+        
+        # 检查是否有待验证的密钥
+        if not hasattr(current_user, 'totp_secret') or not current_user.totp_secret:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="请先设置双因素认证"
+            )
+        
+        # 验证TOTP令牌
+        if not TOTPService.verify_token(current_user.totp_secret, request.totp_code):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="验证码错误，请检查您的认证器应用"
+            )
+        
+        # 验证成功，启用2FA
+        current_user.totp_enabled = True
+        if hasattr(current_user, 'totp_failed_attempts'):
+            current_user.totp_failed_attempts = 0
+        db.commit()
+        
+        logger.info(f"🔐 用户 {current_user.username} 2FA启用成功")
+        
+        return {
+            "success": True,
+            "message": "双因素认证启用成功！请妥善保存备用恢复码",
+            "data": {
+                "enabled": True,
+                "backup_codes": current_user.get_backup_codes()
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"验证2FA设置失败: {str(e)}")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="验证双因素认证失败"
+        )
+
+@router.post("/2fa/disable")
+async def disable_two_factor(
+    request: TwoFactorSetupRequest,  # 复用，需要密码确认
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    禁用双因素认证
+    Disable Two-Factor Authentication
+    """
+    try:
+        logger.info(f"🔐 用户 {current_user.username} 禁用2FA")
+        
+        # 验证当前密码
+        if not verify_password(request.password, current_user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="当前密码错误"
+            )
+        
+        # 检查是否已启用2FA
+        if not hasattr(current_user, 'totp_enabled') or not current_user.totp_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="双因素认证未启用"
+            )
+        
+        # 禁用2FA并清除相关数据
+        current_user.totp_enabled = False
+        current_user.totp_secret = None
+        current_user.backup_codes = None
+        if hasattr(current_user, 'totp_failed_attempts'):
+            current_user.totp_failed_attempts = 0
+        if hasattr(current_user, 'totp_locked_until'):
+            current_user.totp_locked_until = None
+        
+        db.commit()
+        
+        logger.info(f"🔐 用户 {current_user.username} 2FA禁用成功")
+        
+        return {
+            "success": True,
+            "message": "双因素认证已禁用",
+            "data": {
+                "enabled": False
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"禁用2FA失败: {str(e)}")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="禁用双因素认证失败"
+        )
+
+@router.get("/2fa/status")
+async def get_two_factor_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    获取2FA状态
+    Get Two-Factor Authentication status
+    """
+    try:
+        # 检查系统是否启用2FA
+        system_2fa_enabled = SettingsService.get_setting(db, "enableTwoFactor", False)
+        
+        # 检查用户是否启用2FA
+        user_2fa_enabled = False
+        backup_codes_count = 0
+        
+        if hasattr(current_user, 'totp_enabled') and current_user.totp_enabled:
+            user_2fa_enabled = True
+            backup_codes_count = len(current_user.get_backup_codes())
+        
+        return {
+            "success": True,
+            "data": {
+                "system_enabled": system_2fa_enabled,
+                "user_enabled": user_2fa_enabled,
+                "backup_codes_remaining": backup_codes_count,
+                "can_setup": system_2fa_enabled and not user_2fa_enabled
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"获取2FA状态失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="获取双因素认证状态失败"
+        )
+
+@router.post("/2fa/regenerate-backup-codes")
+async def regenerate_backup_codes(
+    request: TwoFactorSetupRequest,  # 需要密码确认
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    重新生成备用恢复码
+    Regenerate backup recovery codes
+    """
+    try:
+        logger.info(f"🔐 用户 {current_user.username} 重新生成备用恢复码")
+        
+        # 验证当前密码
+        if not verify_password(request.password, current_user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="当前密码错误"
+            )
+        
+        # 检查是否已启用2FA
+        if not hasattr(current_user, 'totp_enabled') or not current_user.totp_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="请先启用双因素认证"
+            )
+        
+        # 生成新的备用恢复码
+        backup_codes_count = SettingsService.get_setting(db, "twoFactorBackupCodesCount", 10)
+        new_backup_codes = TOTPService.generate_backup_codes(backup_codes_count)
+        
+        # 更新备用恢复码
+        current_user.set_backup_codes(new_backup_codes)
+        db.commit()
+        
+        logger.info(f"🔐 用户 {current_user.username} 备用恢复码重新生成成功")
+        
+        return {
+            "success": True,
+            "message": "备用恢复码重新生成成功，请妥善保存",
+            "data": {
+                "backup_codes": new_backup_codes
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"重新生成备用恢复码失败: {str(e)}")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="重新生成备用恢复码失败"
+        )

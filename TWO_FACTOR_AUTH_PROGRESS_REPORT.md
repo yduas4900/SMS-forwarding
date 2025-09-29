@@ -32,27 +32,47 @@
   - 添加了4个2FA设置字段：`twoFactorMaxAttempts`, `twoFactorLockDuration`, `twoFactorIssuerName`, `twoFactorBackupCodesCount`
   - 所有设置都有默认值，不影响现有功能
 
+### ✅ 第二阶段：后端API实现（已完成）
+1. **2FA管理API端点** ✅
+   - ✅ `/api/auth/2fa/setup` - 设置2FA（生成密钥和QR码）
+   - ✅ `/api/auth/2fa/verify-setup` - 验证并启用2FA
+   - ✅ `/api/auth/2fa/disable` - 禁用2FA
+   - ✅ `/api/auth/2fa/status` - 获取2FA状态
+   - ✅ `/api/auth/2fa/regenerate-backup-codes` - 重新生成备用恢复码
+
+2. **设置API集成** ✅
+   - ✅ 添加了4个2FA相关设置字段
+   - ✅ 完整的设置类型定义
+   - ✅ 与现有设置系统完全集成
+
+3. **测试脚本** ✅
+   - ✅ 创建了`test_2fa_api.py`测试脚本
+   - ✅ 包含完整的API功能测试
+   - ✅ 包含设置集成测试
+
 ### 🔄 下一步计划
-
-#### 第二阶段：后端API实现
-1. **2FA管理API端点**
-   - 启用/禁用2FA
-   - 生成QR码
-   - 验证TOTP令牌
-   - 生成/使用备用恢复码
-
-2. **登录流程集成**
-   - 在现有登录API中添加2FA验证步骤
-   - 确保与验证码功能兼容
 
 #### 第三阶段：前端实现
 1. **设置界面**
    - 在系统设置中添加2FA配置选项
    - QR码显示和设置向导
+   - 备用恢复码管理
 
 2. **登录界面**
    - 2FA验证步骤
    - 备用恢复码输入
+   - 与现有验证码功能集成
+
+#### 第四阶段：登录流程集成
+1. **2FA登录API**
+   - 带2FA的登录端点
+   - 与验证码功能兼容
+   - 完整的错误处理
+
+2. **安全增强**
+   - 2FA失败次数限制
+   - 2FA锁定机制
+   - 备用恢复码一次性使用
 
 ### 🚨 安全保障
 
