@@ -263,9 +263,17 @@ const Settings: React.FC = () => {
           <Form.Item
             name="systemVersion"
             label="系统版本"
-            rules={[{ required: true, message: '请输入系统版本' }]}
+            tooltip="系统版本由代码配置决定，无法手动修改"
           >
-            <Input />
+            <Input 
+              disabled 
+              placeholder="系统版本（只读）"
+              style={{ 
+                backgroundColor: '#f5f5f5',
+                color: '#666',
+                cursor: 'not-allowed'
+              }}
+            />
           </Form.Item>
         </Col>
       </Row>

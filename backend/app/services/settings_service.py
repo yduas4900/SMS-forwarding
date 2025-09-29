@@ -200,8 +200,8 @@ class SettingsService:
                 if not existing:
                     # 创建新设置
                     SettingsService.set_setting(db, key, value, setting_type, description)
-                elif key in ["systemVersion", "systemName"]:
-                    # 强制更新系统版本和名称，确保与config.py同步
+                elif key in ["systemVersion"]:
+                    # 仅强制更新系统版本，确保与config.py同步
                     SettingsService.set_setting(db, key, value, setting_type, description)
                     logger.info(f"强制更新 {key} 为: {value}")
             
