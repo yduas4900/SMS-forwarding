@@ -18,6 +18,7 @@ from ..models.device import Device
 from ..models.user import User
 from ..config import settings
 from ..websocket import manager
+from ..services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -83,13 +84,22 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_access_token(data: dict, expires_delta: timedelta = None):
+def create_access_token(data: dict, expires_delta: timedelta = None, db: Session = None):
     """创建访问令牌"""
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
+        # 从数据库获取会话超时时间设置
+        session_timeout = settings.access_token_expire_minutes  # 默认值
+        if db:
+            try:
+                session_timeout = SettingsService.get_setting(db, "sessionTimeout", settings.access_token_expire_minutes)
+                logger.info(f"使用数据库中的会话超时时间: {session_timeout} 分钟")
+            except Exception as e:
+                logger.warning(f"获取会话超时设置失败，使用默认值: {e}")
+        
+        expire = datetime.now(timezone.utc) + timedelta(minutes=session_timeout)
     
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
@@ -243,10 +253,9 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
         user.login_count += 1
         db.commit()
         
-        # 创建访问令牌
-        access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+        # 创建访问令牌 - 使用数据库中的会话超时设置
         access_token = create_access_token(
-            data={"sub": user.username}, expires_delta=access_token_expires
+            data={"sub": user.username}, db=db
         )
         
         logger.info(f"管理员登录成功: {user.username}")
@@ -395,11 +404,18 @@ async def change_password(
                 detail="新密码与确认密码不匹配"
             )
         
-        # 验证新密码强度
-        if len(request.new_password) < 6:
+        # 验证新密码强度 - 使用数据库中的密码最小长度设置
+        min_password_length = 6  # 默认值
+        try:
+            min_password_length = SettingsService.get_setting(db, "passwordMinLength", 6)
+            logger.info(f"使用数据库中的密码最小长度: {min_password_length}")
+        except Exception as e:
+            logger.warning(f"获取密码最小长度设置失败，使用默认值: {e}")
+        
+        if len(request.new_password) < min_password_length:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="新密码长度至少为6位"
+                detail=f"新密码长度至少为{min_password_length}位"
             )
         
         # 更新密码
