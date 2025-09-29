@@ -70,16 +70,25 @@ const Login: React.FC = () => {
   useEffect(() => {
     const fetchCaptchaSettings = async () => {
       try {
+        console.log('🔍 开始获取验证码设置...');
         const response = await axios.get('/api/auth/captcha/settings');
+        console.log('🔍 验证码设置响应:', response.data);
+        
         if (response.data.success) {
           setCaptchaSettings(response.data.data);
+          console.log('🔍 验证码设置已更新:', response.data.data);
+          
           // 如果启用了验证码，自动获取验证码
           if (response.data.data.enableLoginCaptcha) {
-            fetchCaptcha();
+            console.log('🔍 验证码已启用，开始获取验证码图片...');
+            // 直接调用获取验证码，不依赖状态
+            fetchCaptchaDirectly();
+          } else {
+            console.log('🔍 验证码未启用');
           }
         }
       } catch (error) {
-        console.log('获取验证码设置失败');
+        console.error('❌ 获取验证码设置失败:', error);
         setCaptchaSettings({ enableLoginCaptcha: false });
       }
     };
@@ -87,7 +96,26 @@ const Login: React.FC = () => {
     fetchCaptchaSettings();
   }, []);
 
-  // 获取验证码
+  // 直接获取验证码（不检查状态）
+  const fetchCaptchaDirectly = async () => {
+    setCaptchaLoading(true);
+    try {
+      const response = await axios.get('/api/auth/captcha');
+      if (response.data) {
+        setCaptchaData({
+          captcha_id: response.data.captcha_id,
+          captcha_image: response.data.captcha_image
+        });
+      }
+    } catch (error) {
+      console.error('获取验证码失败:', error);
+      message.error('获取验证码失败');
+    } finally {
+      setCaptchaLoading(false);
+    }
+  };
+
+  // 获取验证码（带状态检查）
   const fetchCaptcha = async () => {
     if (!captchaSettings.enableLoginCaptcha) return;
     
