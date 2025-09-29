@@ -134,6 +134,59 @@ async def check_user_security_fields(db: Session = Depends(get_db)):
             detail=f"检查失败: {str(e)}"
         )
 
+@router.post("/unlock-user")
+async def unlock_user(request: dict, db: Session = Depends(get_db)):
+    """
+    解锁用户账户（重置登录失败次数和锁定状态）
+    Unlock user account (reset failed login attempts and lock status)
+    """
+    try:
+        username = request.get("username")
+        if not username:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="用户名不能为空"
+            )
+        
+        logger.info(f"🔓 开始解锁用户: {username}")
+        
+        # 查找用户
+        user = db.query(User).filter(User.username == username).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="用户不存在"
+            )
+        
+        # 重置安全字段
+        if hasattr(user, 'failed_login_attempts'):
+            user.failed_login_attempts = 0
+        if hasattr(user, 'locked_until'):
+            user.locked_until = None
+        if hasattr(user, 'last_failed_login'):
+            user.last_failed_login = None
+        
+        db.commit()
+        
+        logger.info(f"✅ 用户 {username} 解锁成功")
+        
+        return {
+            "success": True,
+            "message": f"用户 {username} 已成功解锁",
+            "username": username,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 解锁用户失败: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"解锁用户失败: {str(e)}"
+        )
+
 @router.get("/database-info")
 async def get_database_info(db: Session = Depends(get_db)):
     """
