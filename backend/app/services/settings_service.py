@@ -163,11 +163,20 @@ class SettingsService:
                 "systemDescription": ("专业的短信转发和验证码管理平台，支持多设备接入、智能验证码识别和客户端自定义设置", "string", "系统描述"),
                 "systemVersion": (app_config.app_version, "string", "系统版本"),
                 
-                # 安全设置
-                "sessionTimeout": (30, "integer", "会话超时时间（分钟）"),
+                # 安全设置 - 🚨 修复：不要覆盖用户已设置的值
+                "sessionTimeout": (1, "integer", "会话超时时间（分钟）"),
                 "maxLoginAttempts": (5, "integer", "最大登录尝试次数"),
-                "passwordMinLength": (8, "integer", "密码最小长度"),
+                "passwordMinLength": (6, "integer", "密码最小长度"),
+                "loginLockDuration": (30, "integer", "登录锁定时间（分钟）"),
                 "enableTwoFactor": (False, "boolean", "启用双因素认证"),
+                
+                # 验证码安全设置
+                "enableLoginCaptcha": (False, "boolean", "启用登录验证码"),
+                "captchaType": ("mixed", "string", "验证码类型：number(数字)、letter(字母)、mixed(混合)"),
+                "captchaLength": (4, "integer", "验证码长度"),
+                "captchaMaxAttempts": (3, "integer", "验证码最大错误次数"),
+                "captchaLockDuration": (5, "integer", "验证码错误锁定时间（分钟）"),
+                "captchaDifficulty": ("medium", "string", "验证码难度：easy(简单)、medium(中等)、hard(困难)"),
                 
                 # 通知设置
                 "enableEmailNotification": (True, "boolean", "启用邮件通知"),
@@ -200,10 +209,21 @@ class SettingsService:
                 if not existing:
                     # 创建新设置
                     SettingsService.set_setting(db, key, value, setting_type, description)
+                    logger.info(f"创建默认设置 {key} = {value}")
                 elif key in ["systemVersion"]:
                     # 仅强制更新系统版本，确保与config.py同步
                     SettingsService.set_setting(db, key, value, setting_type, description)
                     logger.info(f"强制更新 {key} 为: {value}")
+                else:
+                    # 🚨 关键修复：不要覆盖用户已设置的值，只更新描述和类型
+                    if existing.description != description:
+                        existing.description = description
+                    if existing.setting_type != setting_type:
+                        existing.setting_type = setting_type
+                    # 不更新值，保持用户设置
+                    logger.info(f"保持用户设置 {key} = {existing.get_value()}")
+            
+            db.commit()
             
             logger.info("默认设置初始化完成")
         except Exception as e:
