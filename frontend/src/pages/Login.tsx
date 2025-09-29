@@ -201,17 +201,25 @@ const Login: React.FC = () => {
       } else {
         console.log('🔐 验证码未启用，使用普通登录API');
         
-        // 🚨 安全修复：当验证码未启用时，确保不会意外调用验证码API
-        const success = await login(values.username, values.password);
-        console.log('🔐 普通登录结果:', success);
-        
-        if (success) {
-          message.success('登录成功！');
-          console.log('🔐 普通登录成功，跳转到dashboard');
-          navigate('/dashboard');
-        } else {
-          console.error('❌ 普通登录失败');
-          message.error('登录失败，请检查用户名和密码');
+        // 🚨 安全修复：正确处理AuthContext login函数的错误
+        try {
+          const success = await login(values.username, values.password);
+          console.log('🔐 普通登录结果:', success);
+          
+          if (success) {
+            message.success('登录成功！');
+            console.log('🔐 普通登录成功，跳转到dashboard');
+            navigate('/dashboard');
+          } else {
+            console.error('❌ 普通登录失败');
+            message.error('登录失败，请检查用户名和密码');
+          }
+        } catch (loginError: any) {
+          // 🚨 关键修复：捕获AuthContext抛出的详细错误信息
+          console.error('❌ 普通登录异常:', loginError);
+          const errorMessage = loginError.message || '登录失败，请检查用户名和密码';
+          console.log('🔐 显示错误消息给用户:', errorMessage);
+          message.error(errorMessage);
         }
       }
     } catch (error: any) {
