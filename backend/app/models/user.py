@@ -1,15 +1,15 @@
 """
-用户模型
-User model for admin authentication
+用户模型 - 简化版本，匹配Railway数据库实际结构
+User model for admin authentication - Simplified to match actual Railway DB structure
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text
+from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from sqlalchemy.sql import func
 from ..database import Base
 
 
 class User(Base):
-    """管理员用户表"""
+    """管理员用户表 - 仅包含Railway数据库中实际存在的字段"""
     __tablename__ = "users"
     
     # 主键
@@ -32,11 +32,6 @@ class User(Base):
     last_login = Column(DateTime(timezone=True), comment="最后登录时间")
     login_count = Column(Integer, default=0, comment="登录次数")
     
-    # 登录安全
-    failed_login_attempts = Column(Integer, default=0, comment="连续登录失败次数")
-    locked_until = Column(DateTime(timezone=True), comment="账户锁定到期时间")
-    last_failed_login = Column(DateTime(timezone=True), comment="最后一次登录失败时间")
-    
     # 时间戳
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), comment="更新时间")
@@ -45,17 +40,17 @@ class User(Base):
         return f"<User(username='{self.username}', email='{self.email}')>"
     
     def to_dict(self):
-        """转换为字典格式 (不包含密码) - 安全处理不存在的字段"""
+        """转换为字典格式 (不包含密码) - 仅返回实际存在的字段"""
         return {
-            "id": getattr(self, 'id', None),
-            "username": getattr(self, 'username', None),
-            "email": getattr(self, 'email', None),
-            "is_active": getattr(self, 'is_active', True),
-            "is_superuser": getattr(self, 'is_superuser', False),
-            "full_name": getattr(self, 'full_name', None),
-            "phone": getattr(self, 'phone', None),
-            "last_login": getattr(self, 'last_login', None).isoformat() if getattr(self, 'last_login', None) else None,
-            "login_count": getattr(self, 'login_count', 0),
-            "created_at": getattr(self, 'created_at', None).isoformat() if getattr(self, 'created_at', None) else None,
-            "updated_at": getattr(self, 'updated_at', None).isoformat() if getattr(self, 'updated_at', None) else None
+            "id": self.id,
+            "username": self.username,
+            "email": self.email,
+            "is_active": self.is_active,
+            "is_superuser": self.is_superuser,
+            "full_name": self.full_name,
+            "phone": self.phone,
+            "last_login": self.last_login.isoformat() if self.last_login else None,
+            "login_count": self.login_count or 0,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
