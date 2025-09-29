@@ -904,8 +904,13 @@ async def login_admin_with_captcha(request: LoginWithCaptchaRequest, db: Session
             )
         
         # 🚨 安全修复：严格验证验证码是否正确
-        if request.captcha_code.upper() != stored_captcha["code"]:
-            logger.error(f"🔐 验证码错误: 输入'{request.captcha_code.upper()}' != 存储'{stored_captcha['code']}'")
+        input_code = request.captcha_code.upper().strip()
+        stored_code = stored_captcha["code"].strip()
+        
+        logger.info(f"🔐 验证码比较: 输入='{input_code}' (长度:{len(input_code)}) vs 存储='{stored_code}' (长度:{len(stored_code)})")
+        
+        if input_code != stored_code:
+            logger.error(f"🔐 验证码错误: 输入'{input_code}' != 存储'{stored_code}'")
             
             # 🚨 新增：处理验证码错误，增加错误计数
             handle_captcha_error(request.username, db)
