@@ -33,6 +33,12 @@ class SystemSettingsModel(BaseModel):
     passwordMinLength: Optional[int] = Field(default=8, ge=6, le=20, description="密码最小长度")
     enableTwoFactor: Optional[bool] = Field(default=False, description="启用双因素认证")
     
+    # 🔐 双因素认证设置
+    twoFactorMaxAttempts: Optional[int] = Field(default=3, ge=1, le=10, description="2FA最大错误次数")
+    twoFactorLockDuration: Optional[int] = Field(default=15, ge=1, le=60, description="2FA错误锁定时间（分钟）")
+    twoFactorIssuerName: Optional[str] = Field(default="SMS转发系统", description="2FA发行者名称")
+    twoFactorBackupCodesCount: Optional[int] = Field(default=10, ge=5, le=20, description="备用恢复码数量")
+    
     # 登录验证码设置
     enableLoginCaptcha: Optional[bool] = Field(default=False, description="启用登录验证码")
     captchaType: Optional[str] = Field(default="mixed", description="验证码类型：number(数字)、letter(字母)、mixed(混合)")
@@ -188,6 +194,11 @@ async def update_settings(
             "loginLockDuration": "integer",
             "passwordMinLength": "integer",
             "enableTwoFactor": "boolean",
+            # 🔐 双因素认证设置类型
+            "twoFactorMaxAttempts": "integer",
+            "twoFactorLockDuration": "integer",
+            "twoFactorIssuerName": "string",
+            "twoFactorBackupCodesCount": "integer",
             "enableLoginCaptcha": "boolean",
             "captchaType": "string",
             "captchaLength": "integer",

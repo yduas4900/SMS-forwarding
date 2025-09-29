@@ -37,6 +37,13 @@ class User(Base):
     last_failed_login = Column(DateTime(timezone=True), comment="最后失败登录时间")
     locked_until = Column(DateTime(timezone=True), comment="锁定到期时间")
     
+    # 🔐 新增：双因素认证字段 - 默认为空，不影响现有功能
+    totp_secret = Column(String(32), comment="TOTP密钥（Base32编码）")
+    totp_enabled = Column(Boolean, default=False, comment="是否启用双因素认证")
+    backup_codes = Column(String(1000), comment="备用恢复码（JSON格式）")
+    totp_failed_attempts = Column(Integer, default=0, comment="2FA验证失败次数")
+    totp_locked_until = Column(DateTime(timezone=True), comment="2FA锁定到期时间")
+    
     # 时间戳
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), comment="更新时间")
@@ -77,3 +84,41 @@ class User(Base):
         from datetime import datetime, timezone
         remaining_seconds = (self.locked_until - datetime.now(timezone.utc)).total_seconds()
         return max(0, remaining_seconds / 60)
+    
+    # 🔐 双因素认证相关方法
+    def is_totp_enabled(self):
+        """检查是否启用了双因素认证"""
+        return bool(self.totp_enabled and self.totp_secret)
+    
+    def is_totp_locked(self):
+        """检查2FA是否被锁定"""
+        if not self.totp_locked_until:
+            return False
+        
+        from datetime import datetime, timezone
+        return datetime.now(timezone.utc) < self.totp_locked_until
+    
+    def get_totp_remaining_lock_time(self):
+        """获取2FA剩余锁定时间（分钟）"""
+        if not self.is_totp_locked():
+            return 0
+        
+        from datetime import datetime, timezone
+        remaining_seconds = (self.totp_locked_until - datetime.now(timezone.utc)).total_seconds()
+        return max(0, remaining_seconds / 60)
+    
+    def get_backup_codes(self):
+        """获取备用恢复码列表"""
+        if not self.backup_codes:
+            return []
+        
+        import json
+        try:
+            return json.loads(self.backup_codes)
+        except:
+            return []
+    
+    def set_backup_codes(self, codes):
+        """设置备用恢复码"""
+        import json
+        self.backup_codes = json.dumps(codes)
