@@ -230,9 +230,9 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
                 detail="用户名或密码错误"
             )
         
-        # 检查账户是否被锁定
+        # 检查账户是否被锁定（安全检查，防止字段不存在）
         current_time = datetime.now(timezone.utc)
-        if user.locked_until and user.locked_until > current_time:
+        if hasattr(user, 'locked_until') and user.locked_until and user.locked_until > current_time:
             remaining_minutes = int((user.locked_until - current_time).total_seconds() / 60)
             logger.warning(f"账户被锁定: {request.username}, 剩余时间: {remaining_minutes}分钟")
             raise HTTPException(
@@ -240,8 +240,8 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
                 detail=f"账户已被锁定，请在 {remaining_minutes} 分钟后重试"
             )
         
-        # 如果锁定时间已过，重置失败计数
-        if user.locked_until and user.locked_until <= current_time:
+        # 如果锁定时间已过，重置失败计数（安全检查）
+        if hasattr(user, 'locked_until') and hasattr(user, 'failed_login_attempts') and user.locked_until and user.locked_until <= current_time:
             user.failed_login_attempts = 0
             user.locked_until = None
             logger.info(f"账户锁定已过期，重置失败计数: {request.username}")
@@ -266,10 +266,13 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
                 detail="用户账号已被禁用"
             )
         
-        # 登录成功，重置失败计数
-        user.failed_login_attempts = 0
-        user.locked_until = None
-        user.last_failed_login = None
+        # 登录成功，重置失败计数（安全检查）
+        if hasattr(user, 'failed_login_attempts'):
+            user.failed_login_attempts = 0
+        if hasattr(user, 'locked_until'):
+            user.locked_until = None
+        if hasattr(user, 'last_failed_login'):
+            user.last_failed_login = None
         
         # 更新登录信息
         user.last_login = datetime.now(timezone.utc)
@@ -306,6 +309,11 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
 async def handle_login_failure(user: User, db: Session):
     """处理登录失败"""
     try:
+        # 如果用户表没有安全字段，跳过登录失败处理
+        if not hasattr(user, 'failed_login_attempts'):
+            logger.info(f"用户表缺少安全字段，跳过登录失败处理: {user.username}")
+            return
+        
         # 获取最大登录尝试次数设置
         max_attempts = 5  # 默认值
         try:
@@ -318,12 +326,14 @@ async def handle_login_failure(user: User, db: Session):
         if user.failed_login_attempts is None:
             user.failed_login_attempts = 0
         user.failed_login_attempts += 1
-        user.last_failed_login = datetime.now(timezone.utc)
+        
+        if hasattr(user, 'last_failed_login'):
+            user.last_failed_login = datetime.now(timezone.utc)
         
         logger.warning(f"用户 {user.username} 登录失败，当前失败次数: {user.failed_login_attempts}/{max_attempts}")
         
         # 检查是否需要锁定账户
-        if user.failed_login_attempts >= max_attempts:
+        if user.failed_login_attempts >= max_attempts and hasattr(user, 'locked_until'):
             # 锁定账户30分钟
             lock_duration_minutes = 30
             user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=lock_duration_minutes)
