@@ -220,11 +220,11 @@ async def register_device(request: TokenRequest, db: Session = Depends(get_db)):
 @router.post("/login")
 async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
     """
-    管理员登录 - 简化版本，确保基本功能正常
-    Admin login - Simplified version to ensure basic functionality
+    管理员登录 - 完整安全版本（包含登录失败次数限制和锁定）
+    Admin login - Complete security version (with login failure limit and locking)
     """
     try:
-        logger.info(f"登录尝试: {request.username}")
+        logger.info(f"🔐 普通登录尝试: {request.username}")
         
         user = db.query(User).filter(User.username == request.username).first()
         
@@ -235,14 +235,56 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
                 detail="用户名或密码错误"
             )
         
+        # 🚨 新增：检查用户是否被锁定
+        if hasattr(user, 'locked_until') and user.locked_until:
+            current_time = datetime.now(timezone.utc)
+            if current_time < user.locked_until:
+                remaining_time = (user.locked_until - current_time).total_seconds() / 60
+                logger.error(f"🔒 用户 {request.username} 仍在锁定期内，剩余时间: {remaining_time:.1f} 分钟")
+                raise HTTPException(
+                    status_code=status.HTTP_423_LOCKED,
+                    detail=f"账户已被锁定，请等待 {remaining_time:.1f} 分钟后再试"
+                )
+            else:
+                # 锁定期已过，清除锁定状态
+                logger.info(f"🔓 用户 {request.username} 锁定期已过，清除锁定状态")
+                user.locked_until = None
+                if hasattr(user, 'failed_login_attempts'):
+                    user.failed_login_attempts = 0
+                db.commit()
+        
         logger.info(f"找到用户: {user.username}, 验证密码...")
         
         if not verify_password(request.password, user.hashed_password):
-            logger.warning(f"密码验证失败: {request.username}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户名或密码错误"
-            )
+            logger.warning(f"🚨 密码验证失败: {request.username}")
+            # 🚨 新增：处理登录失败，增加失败计数和锁定检查
+            await handle_login_failure(user, db)
+            
+            # 检查是否需要立即锁定
+            if hasattr(user, 'failed_login_attempts') and hasattr(user, 'locked_until'):
+                max_attempts = SettingsService.get_setting(db, "maxLoginAttempts", 5)
+                current_attempts = user.failed_login_attempts or 0
+                
+                if current_attempts >= max_attempts and user.locked_until:
+                    lock_duration = SettingsService.get_setting(db, "loginLockDuration", 30)
+                    logger.error(f"🔒 用户 {request.username} 登录失败次数达到上限，已被锁定 {lock_duration} 分钟")
+                    raise HTTPException(
+                        status_code=status.HTTP_423_LOCKED,
+                        detail=f"登录失败次数过多，账户已被锁定 {lock_duration} 分钟"
+                    )
+                else:
+                    remaining_attempts = max_attempts - current_attempts
+                    logger.warning(f"🚨 用户 {request.username} 密码错误，剩余尝试次数: {remaining_attempts}")
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail=f"用户名或密码错误，剩余尝试次数: {remaining_attempts}"
+                    )
+            else:
+                # 用户表没有安全字段，返回普通错误
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="用户名或密码错误"
+                )
         
         if not user.is_active:
             logger.warning(f"用户账号已被禁用: {request.username}")
@@ -250,6 +292,12 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="用户账号已被禁用"
             )
+        
+        # 🚨 新增：登录成功，重置失败计数和锁定状态
+        if hasattr(user, 'failed_login_attempts'):
+            user.failed_login_attempts = 0
+        if hasattr(user, 'locked_until'):
+            user.locked_until = None
         
         # 更新登录信息
         user.last_login = datetime.now(timezone.utc)
@@ -261,7 +309,7 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
         # 🚨 修复：使用数据库中的会话超时时间设置
         try:
             session_timeout = SettingsService.get_setting(db, "sessionTimeout", 30)
-            logger.info(f"使用数据库中的会话超时时间: {session_timeout} 分钟")
+            logger.info(f"普通登录使用数据库中的会话超时时间: {session_timeout} 分钟")
         except Exception as e:
             logger.warning(f"获取会话超时设置失败，使用默认值30分钟: {e}")
             session_timeout = 30
@@ -271,7 +319,7 @@ async def login_admin(request: LoginRequest, db: Session = Depends(get_db)):
             expires_delta=timedelta(minutes=session_timeout)
         )
         
-        logger.info(f"管理员登录成功: {user.username}")
+        logger.info(f"🔐 普通登录成功: {user.username}")
         
         # 返回标准格式，与前端期望一致
         return {

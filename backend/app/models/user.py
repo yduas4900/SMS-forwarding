@@ -32,6 +32,11 @@ class User(Base):
     last_login = Column(DateTime(timezone=True), comment="最后登录时间")
     login_count = Column(Integer, default=0, comment="登录次数")
     
+    # 🚨 新增：安全字段 - 登录失败次数限制和锁定
+    failed_login_attempts = Column(Integer, default=0, comment="登录失败次数")
+    last_failed_login = Column(DateTime(timezone=True), comment="最后失败登录时间")
+    locked_until = Column(DateTime(timezone=True), comment="锁定到期时间")
+    
     # 时间戳
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), comment="更新时间")
@@ -40,7 +45,7 @@ class User(Base):
         return f"<User(username='{self.username}', email='{self.email}')>"
     
     def to_dict(self):
-        """转换为字典格式 (不包含密码) - 仅返回实际存在的字段"""
+        """转换为字典格式 (不包含密码和敏感安全信息)"""
         return {
             "id": self.id,
             "username": self.username,
@@ -52,5 +57,23 @@ class User(Base):
             "last_login": self.last_login.isoformat() if self.last_login else None,
             "login_count": self.login_count or 0,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            # 🚨 注意：不返回敏感的安全字段（failed_login_attempts, locked_until等）
         }
+    
+    def is_locked(self):
+        """检查用户是否被锁定"""
+        if not self.locked_until:
+            return False
+        
+        from datetime import datetime, timezone
+        return datetime.now(timezone.utc) < self.locked_until
+    
+    def get_remaining_lock_time(self):
+        """获取剩余锁定时间（分钟）"""
+        if not self.is_locked():
+            return 0
+        
+        from datetime import datetime, timezone
+        remaining_seconds = (self.locked_until - datetime.now(timezone.utc)).total_seconds()
+        return max(0, remaining_seconds / 60)
