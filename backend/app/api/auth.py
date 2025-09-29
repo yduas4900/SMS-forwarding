@@ -521,6 +521,7 @@ async def device_heartbeat(
 
 # 验证码相关功能
 captcha_store = {}  # 临时存储验证码，生产环境建议使用Redis
+captcha_attempts = {}  # 存储验证码错误尝试次数，格式: {username: {"attempts": count, "locked_until": datetime}}
 
 class CaptchaRequest(BaseModel):
     """验证码请求"""
@@ -548,6 +549,87 @@ def generate_captcha_code(captcha_type: str, length: int) -> str:
         chars = string.ascii_uppercase + string.digits
     
     return ''.join(random.choice(chars) for _ in range(length))
+
+def check_captcha_attempts(username: str, db: Session) -> bool:
+    """
+    检查验证码错误尝试次数是否超限
+    Check if captcha error attempts exceed limit
+    """
+    try:
+        # 获取验证码设置
+        max_attempts = SettingsService.get_setting(db, "captchaMaxAttempts", 3)
+        lock_duration = SettingsService.get_setting(db, "captchaLockDuration", 5)  # 分钟
+        
+        current_time = datetime.now(timezone.utc)
+        
+        # 检查用户是否存在错误记录
+        if username in captcha_attempts:
+            user_attempts = captcha_attempts[username]
+            
+            # 检查是否仍在锁定期内
+            if "locked_until" in user_attempts and current_time < user_attempts["locked_until"]:
+                remaining_time = (user_attempts["locked_until"] - current_time).total_seconds() / 60
+                logger.warning(f"🔒 用户 {username} 仍在验证码锁定期内，剩余时间: {remaining_time:.1f} 分钟")
+                return False
+            
+            # 如果锁定期已过，重置计数
+            if "locked_until" in user_attempts and current_time >= user_attempts["locked_until"]:
+                logger.info(f"🔓 用户 {username} 验证码锁定期已过，重置错误计数")
+                captcha_attempts[username] = {"attempts": 0}
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"检查验证码尝试次数失败: {e}")
+        return True  # 出错时允许尝试
+
+
+def handle_captcha_error(username: str, db: Session) -> None:
+    """
+    处理验证码错误，增加错误计数并检查是否需要锁定
+    Handle captcha error, increment error count and check if locking is needed
+    """
+    try:
+        # 获取验证码设置
+        max_attempts = SettingsService.get_setting(db, "captchaMaxAttempts", 3)
+        lock_duration = SettingsService.get_setting(db, "captchaLockDuration", 5)  # 分钟
+        
+        current_time = datetime.now(timezone.utc)
+        
+        # 初始化用户错误记录
+        if username not in captcha_attempts:
+            captcha_attempts[username] = {"attempts": 0}
+        
+        # 增加错误计数
+        captcha_attempts[username]["attempts"] += 1
+        attempts = captcha_attempts[username]["attempts"]
+        
+        logger.warning(f"🚨 用户 {username} 验证码错误，当前错误次数: {attempts}/{max_attempts}")
+        
+        # 检查是否达到最大错误次数
+        if attempts >= max_attempts:
+            # 锁定用户
+            lock_until = current_time + timedelta(minutes=lock_duration)
+            captcha_attempts[username]["locked_until"] = lock_until
+            
+            logger.error(f"🔒 用户 {username} 验证码错误次数达到上限，锁定 {lock_duration} 分钟至 {lock_until}")
+        
+    except Exception as e:
+        logger.error(f"处理验证码错误失败: {e}")
+
+
+def reset_captcha_attempts(username: str) -> None:
+    """
+    重置验证码错误计数（登录成功时调用）
+    Reset captcha error attempts (called on successful login)
+    """
+    try:
+        if username in captcha_attempts:
+            logger.info(f"🔓 重置用户 {username} 的验证码错误计数")
+            del captcha_attempts[username]
+    except Exception as e:
+        logger.error(f"重置验证码错误计数失败: {e}")
+
 
 def create_captcha_image(code: str, difficulty: str = "medium") -> str:
     """创建验证码图片并返回base64编码"""
@@ -670,13 +752,30 @@ async def get_captcha(db: Session = Depends(get_db)):
 @router.post("/login-with-captcha")
 async def login_admin_with_captcha(request: LoginWithCaptchaRequest, db: Session = Depends(get_db)):
     """
-    带验证码的管理员登录 - 安全修复版本
-    Admin login with captcha - Security fixed version
+    带验证码的管理员登录 - 完整安全版本（包含错误次数限制和锁定）
+    Admin login with captcha - Complete security version (with error limit and locking)
     """
     try:
         logger.info(f"🔐 带验证码登录尝试: {request.username}")
         logger.info(f"🔐 收到的验证码ID: {request.captcha_id}")
         logger.info(f"🔐 收到的验证码: {request.captcha_code}")
+        
+        # 🚨 新增：检查验证码错误次数限制
+        if not check_captcha_attempts(request.username, db):
+            # 获取锁定时间信息
+            lock_duration = SettingsService.get_setting(db, "captchaLockDuration", 5)
+            if request.username in captcha_attempts and "locked_until" in captcha_attempts[request.username]:
+                remaining_time = (captcha_attempts[request.username]["locked_until"] - datetime.now(timezone.utc)).total_seconds() / 60
+                logger.error(f"🔒 用户 {request.username} 验证码错误次数过多，仍在锁定期内")
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"验证码错误次数过多，请等待 {remaining_time:.1f} 分钟后再试"
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"验证码错误次数过多，请等待 {lock_duration} 分钟后再试"
+                )
         
         # 🚨 安全修复：检查是否启用验证码
         enable_captcha = SettingsService.get_setting(db, "enableLoginCaptcha", False)
@@ -719,15 +818,35 @@ async def login_admin_with_captcha(request: LoginWithCaptchaRequest, db: Session
         # 🚨 安全修复：严格验证验证码是否正确
         if request.captcha_code.upper() != stored_captcha["code"]:
             logger.error(f"🔐 验证码错误: 输入'{request.captcha_code.upper()}' != 存储'{stored_captcha['code']}'")
-            # 🚨 关键修复：验证码错误时直接返回错误，不继续执行登录
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="验证码错误"
-            )
+            
+            # 🚨 新增：处理验证码错误，增加错误计数
+            handle_captcha_error(request.username, db)
+            
+            # 检查是否需要立即锁定
+            max_attempts = SettingsService.get_setting(db, "captchaMaxAttempts", 3)
+            current_attempts = captcha_attempts.get(request.username, {}).get("attempts", 0)
+            
+            if current_attempts >= max_attempts:
+                lock_duration = SettingsService.get_setting(db, "captchaLockDuration", 5)
+                logger.error(f"🔒 用户 {request.username} 验证码错误次数达到上限，已被锁定 {lock_duration} 分钟")
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"验证码错误次数过多，已被锁定 {lock_duration} 分钟"
+                )
+            else:
+                remaining_attempts = max_attempts - current_attempts
+                logger.warning(f"🚨 用户 {request.username} 验证码错误，剩余尝试次数: {remaining_attempts}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"验证码错误，剩余尝试次数: {remaining_attempts}"
+                )
         
         logger.info("🔐 验证码验证成功！")
         # 验证码正确，删除已使用的验证码
         del captcha_store[request.captcha_id]
+        
+        # 🚨 新增：验证码验证成功，重置错误计数
+        reset_captcha_attempts(request.username)
         
         # 🚨 安全修复：只有验证码验证成功后才执行用户名密码验证
         logger.info("🔐 验证码验证通过，开始执行用户名密码验证")
