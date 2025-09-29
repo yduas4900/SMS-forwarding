@@ -12,6 +12,11 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 import secrets
 import logging
+import random
+import string
+from io import BytesIO
+import base64
+from PIL import Image, ImageDraw, ImageFont
 
 from ..database import get_db
 from ..models.device import Device
@@ -512,3 +517,248 @@ async def device_heartbeat(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="心跳更新失败"
         )
+
+
+# 验证码相关功能
+captcha_store = {}  # 临时存储验证码，生产环境建议使用Redis
+
+class CaptchaRequest(BaseModel):
+    """验证码请求"""
+    pass
+
+class CaptchaResponse(BaseModel):
+    """验证码响应"""
+    captcha_id: str
+    captcha_image: str  # base64编码的图片
+
+class LoginWithCaptchaRequest(BaseModel):
+    """带验证码的登录请求"""
+    username: str
+    password: str
+    captcha_id: str
+    captcha_code: str
+
+def generate_captcha_code(captcha_type: str, length: int) -> str:
+    """生成验证码字符串"""
+    if captcha_type == "number":
+        chars = string.digits
+    elif captcha_type == "letter":
+        chars = string.ascii_uppercase
+    else:  # mixed
+        chars = string.ascii_uppercase + string.digits
+    
+    return ''.join(random.choice(chars) for _ in range(length))
+
+def create_captcha_image(code: str, difficulty: str = "medium") -> str:
+    """创建验证码图片并返回base64编码"""
+    try:
+        # 图片尺寸
+        width, height = 120, 40
+        
+        # 创建图片
+        image = Image.new('RGB', (width, height), color='white')
+        draw = ImageDraw.Draw(image)
+        
+        # 根据难度设置干扰程度
+        if difficulty == "easy":
+            noise_lines = 0
+            noise_points = 0
+        elif difficulty == "medium":
+            noise_lines = 2
+            noise_points = 50
+        else:  # hard
+            noise_lines = 5
+            noise_points = 100
+        
+        # 绘制干扰线
+        for _ in range(noise_lines):
+            x1 = random.randint(0, width)
+            y1 = random.randint(0, height)
+            x2 = random.randint(0, width)
+            y2 = random.randint(0, height)
+            draw.line([(x1, y1), (x2, y2)], fill='gray', width=1)
+        
+        # 绘制干扰点
+        for _ in range(noise_points):
+            x = random.randint(0, width)
+            y = random.randint(0, height)
+            draw.point((x, y), fill='gray')
+        
+        # 绘制验证码文字
+        try:
+            # 尝试使用系统字体
+            font_size = 24
+            font = ImageFont.load_default()
+        except:
+            font = ImageFont.load_default()
+        
+        # 计算文字位置
+        char_width = width // len(code)
+        for i, char in enumerate(code):
+            x = char_width * i + random.randint(5, 15)
+            y = random.randint(5, 15)
+            # 随机颜色
+            color = (
+                random.randint(0, 100),
+                random.randint(0, 100),
+                random.randint(0, 100)
+            )
+            draw.text((x, y), char, font=font, fill=color)
+        
+        # 转换为base64
+        buffer = BytesIO()
+        image.save(buffer, format='PNG')
+        img_str = base64.b64encode(buffer.getvalue()).decode()
+        
+        return f"data:image/png;base64,{img_str}"
+        
+    except Exception as e:
+        logger.error(f"创建验证码图片失败: {e}")
+        # 返回简单的文本验证码
+        return f"data:text/plain;base64,{base64.b64encode(code.encode()).decode()}"
+
+@router.get("/captcha", response_model=CaptchaResponse)
+async def get_captcha(db: Session = Depends(get_db)):
+    """
+    获取登录验证码
+    Get login captcha
+    """
+    try:
+        # 检查是否启用验证码
+        enable_captcha = SettingsService.get_setting(db, "enableLoginCaptcha", False)
+        if not enable_captcha:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="验证码功能未启用"
+            )
+        
+        # 获取验证码设置
+        captcha_type = SettingsService.get_setting(db, "captchaType", "mixed")
+        captcha_length = SettingsService.get_setting(db, "captchaLength", 4)
+        captcha_difficulty = SettingsService.get_setting(db, "captchaDifficulty", "medium")
+        
+        # 生成验证码
+        captcha_id = secrets.token_urlsafe(16)
+        captcha_code = generate_captcha_code(captcha_type, captcha_length)
+        
+        # 创建验证码图片
+        captcha_image = create_captcha_image(captcha_code, captcha_difficulty)
+        
+        # 存储验证码（5分钟过期）
+        captcha_store[captcha_id] = {
+            "code": captcha_code.upper(),
+            "created_at": datetime.now(timezone.utc),
+            "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5)
+        }
+        
+        logger.info(f"生成验证码: {captcha_id}, 类型: {captcha_type}, 长度: {captcha_length}")
+        
+        return CaptchaResponse(
+            captcha_id=captcha_id,
+            captcha_image=captcha_image
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"生成验证码失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="生成验证码失败"
+        )
+
+@router.post("/login-with-captcha")
+async def login_admin_with_captcha(request: LoginWithCaptchaRequest, db: Session = Depends(get_db)):
+    """
+    带验证码的管理员登录
+    Admin login with captcha
+    """
+    try:
+        logger.info(f"带验证码登录尝试: {request.username}")
+        
+        # 检查是否启用验证码
+        enable_captcha = SettingsService.get_setting(db, "enableLoginCaptcha", False)
+        if not enable_captcha:
+            # 如果未启用验证码，回退到普通登录
+            return await login_admin(LoginRequest(username=request.username, password=request.password), db)
+        
+        # 验证验证码
+        if request.captcha_id not in captcha_store:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="验证码已过期或不存在"
+            )
+        
+        stored_captcha = captcha_store[request.captcha_id]
+        current_time = datetime.now(timezone.utc)
+        
+        # 检查验证码是否过期
+        if current_time > stored_captcha["expires_at"]:
+            del captcha_store[request.captcha_id]
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="验证码已过期"
+            )
+        
+        # 验证验证码是否正确
+        if request.captcha_code.upper() != stored_captcha["code"]:
+            # 验证码错误，但不删除，允许重试
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="验证码错误"
+            )
+        
+        # 验证码正确，删除已使用的验证码
+        del captcha_store[request.captcha_id]
+        
+        # 执行正常的登录流程
+        return await login_admin(LoginRequest(username=request.username, password=request.password), db)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"带验证码登录失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="登录过程中发生错误"
+        )
+
+@router.get("/captcha/settings")
+async def get_captcha_settings(db: Session = Depends(get_db)):
+    """
+    获取验证码设置（公开API）
+    Get captcha settings (public API)
+    """
+    try:
+        enable_captcha = SettingsService.get_setting(db, "enableLoginCaptcha", False)
+        
+        if not enable_captcha:
+            return {
+                "success": True,
+                "data": {
+                    "enableLoginCaptcha": False
+                }
+            }
+        
+        captcha_settings = {
+            "enableLoginCaptcha": enable_captcha,
+            "captchaType": SettingsService.get_setting(db, "captchaType", "mixed"),
+            "captchaLength": SettingsService.get_setting(db, "captchaLength", 4),
+            "captchaMaxAttempts": SettingsService.get_setting(db, "captchaMaxAttempts", 3),
+            "captchaLockDuration": SettingsService.get_setting(db, "captchaLockDuration", 5),
+            "captchaDifficulty": SettingsService.get_setting(db, "captchaDifficulty", "medium")
+        }
+        
+        return {
+            "success": True,
+            "data": captcha_settings
+        }
+        
+    except Exception as e:
+        logger.error(f"获取验证码设置失败: {str(e)}")
+        return {
+            "success": True,
+            "data": {
+                "enableLoginCaptcha": False
+            }
+        }

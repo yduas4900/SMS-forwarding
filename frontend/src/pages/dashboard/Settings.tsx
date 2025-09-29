@@ -48,6 +48,14 @@ interface SystemSettings {
   passwordMinLength: number;
   enableTwoFactor: boolean;
   
+  // 登录验证码设置
+  enableLoginCaptcha: boolean;
+  captchaType: string;
+  captchaLength: number;
+  captchaMaxAttempts: number;
+  captchaLockDuration: number;
+  captchaDifficulty: string;
+  
   // 通知设置
   enableEmailNotification: boolean;
   enableSmsNotification: boolean;
@@ -330,6 +338,98 @@ const Settings: React.FC = () => {
         valuePropName="checked"
       >
         <Switch />
+      </Form.Item>
+
+      {/* 登录验证码设置 */}
+      <Title level={5} style={{ marginTop: 24, marginBottom: 16 }}>登录验证码设置</Title>
+      
+      <Form.Item
+        name="enableLoginCaptcha"
+        label="启用登录验证码"
+        valuePropName="checked"
+        tooltip="开启后，登录页面将显示验证码输入框，增强登录安全性"
+      >
+        <Switch />
+      </Form.Item>
+
+      <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => 
+        prevValues.enableLoginCaptcha !== currentValues.enableLoginCaptcha
+      }>
+        {({ getFieldValue }) => {
+          const enableLoginCaptcha = getFieldValue('enableLoginCaptcha');
+          return enableLoginCaptcha ? (
+            <>
+              <Row gutter={16}>
+                <Col span={8}>
+                  <Form.Item
+                    name="captchaType"
+                    label="验证码类型"
+                    rules={[{ required: true, message: '请选择验证码类型' }]}
+                  >
+                    <Select>
+                      <Option value="number">纯数字</Option>
+                      <Option value="letter">纯字母</Option>
+                      <Option value="mixed">数字+字母</Option>
+                    </Select>
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item
+                    name="captchaLength"
+                    label="验证码长度"
+                    rules={[{ required: true, message: '请输入验证码长度' }]}
+                  >
+                    <InputNumber min={3} max={8} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item
+                    name="captchaDifficulty"
+                    label="验证码难度"
+                    rules={[{ required: true, message: '请选择验证码难度' }]}
+                  >
+                    <Select>
+                      <Option value="easy">简单（无干扰线）</Option>
+                      <Option value="medium">中等（少量干扰）</Option>
+                      <Option value="hard">困难（较多干扰）</Option>
+                    </Select>
+                  </Form.Item>
+                </Col>
+              </Row>
+              
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="captchaMaxAttempts"
+                    label="验证码最大错误次数"
+                    rules={[{ required: true, message: '请输入验证码最大错误次数' }]}
+                    tooltip="验证码输入错误达到此次数后将锁定登录"
+                  >
+                    <InputNumber min={1} max={10} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="captchaLockDuration"
+                    label="验证码错误锁定时间（分钟）"
+                    rules={[{ required: true, message: '请输入锁定时间' }]}
+                    tooltip="验证码错误次数达到上限后的锁定时间"
+                  >
+                    <InputNumber min={1} max={60} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              <Alert
+                message="验证码功能说明"
+                description="启用验证码后，用户登录时需要输入图形验证码。验证码错误次数达到上限后，该IP地址将被临时锁定。"
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+            </>
+          ) : null;
+        }}
       </Form.Item>
 
       <Divider />

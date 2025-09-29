@@ -32,6 +32,14 @@ class SystemSettingsModel(BaseModel):
     passwordMinLength: Optional[int] = Field(default=8, ge=6, le=20, description="密码最小长度")
     enableTwoFactor: Optional[bool] = Field(default=False, description="启用双因素认证")
     
+    # 登录验证码设置
+    enableLoginCaptcha: Optional[bool] = Field(default=False, description="启用登录验证码")
+    captchaType: Optional[str] = Field(default="mixed", description="验证码类型：number(数字)、letter(字母)、mixed(混合)")
+    captchaLength: Optional[int] = Field(default=4, ge=3, le=8, description="验证码长度")
+    captchaMaxAttempts: Optional[int] = Field(default=3, ge=1, le=10, description="验证码最大错误次数")
+    captchaLockDuration: Optional[int] = Field(default=5, ge=1, le=60, description="验证码错误锁定时间（分钟）")
+    captchaDifficulty: Optional[str] = Field(default="medium", description="验证码难度：easy(简单)、medium(中等)、hard(困难)")
+    
     # 通知设置
     enableEmailNotification: Optional[bool] = Field(default=True, description="启用邮件通知")
     enableSmsNotification: Optional[bool] = Field(default=False, description="启用短信通知")
@@ -178,6 +186,12 @@ async def update_settings(
             "maxLoginAttempts": "integer",
             "passwordMinLength": "integer",
             "enableTwoFactor": "boolean",
+            "enableLoginCaptcha": "boolean",
+            "captchaType": "string",
+            "captchaLength": "integer",
+            "captchaMaxAttempts": "integer",
+            "captchaLockDuration": "integer",
+            "captchaDifficulty": "string",
             "enableEmailNotification": "boolean",
             "enableSmsNotification": "boolean",
             "notificationEmail": "string",
@@ -319,6 +333,12 @@ async def import_settings(
             "maxLoginAttempts": "integer",
             "passwordMinLength": "integer",
             "enableTwoFactor": "boolean",
+            "enableLoginCaptcha": "boolean",
+            "captchaType": "string",
+            "captchaLength": "integer",
+            "captchaMaxAttempts": "integer",
+            "captchaLockDuration": "integer",
+            "captchaDifficulty": "string",
             "enableEmailNotification": "boolean",
             "enableSmsNotification": "boolean",
             "notificationEmail": "string",

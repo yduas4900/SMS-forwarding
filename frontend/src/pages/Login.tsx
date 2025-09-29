@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Button, Card, message, Typography } from 'antd';
-import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { Form, Input, Button, Card, message, Typography, Row, Col } from 'antd';
+import { UserOutlined, LockOutlined, SafetyOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -11,6 +11,7 @@ const { Title } = Typography;
 interface LoginForm {
   username: string;
   password: string;
+  captcha?: string;
 }
 
 interface SystemSettings {
@@ -19,9 +20,26 @@ interface SystemSettings {
   systemVersion: string;
 }
 
+interface CaptchaSettings {
+  enableLoginCaptcha: boolean;
+  captchaType?: string;
+  captchaLength?: number;
+  captchaMaxAttempts?: number;
+  captchaLockDuration?: number;
+  captchaDifficulty?: string;
+}
+
+interface CaptchaData {
+  captcha_id: string;
+  captcha_image: string;
+}
+
 const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
+  const [captchaSettings, setCaptchaSettings] = useState<CaptchaSettings>({ enableLoginCaptcha: false });
+  const [captchaData, setCaptchaData] = useState<CaptchaData | null>(null);
+  const [captchaLoading, setCaptchaLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -47,6 +65,53 @@ const Login: React.FC = () => {
     
     fetchSystemSettings();
   }, []);
+
+  // 获取验证码设置
+  useEffect(() => {
+    const fetchCaptchaSettings = async () => {
+      try {
+        const response = await axios.get('/api/auth/captcha/settings');
+        if (response.data.success) {
+          setCaptchaSettings(response.data.data);
+          // 如果启用了验证码，自动获取验证码
+          if (response.data.data.enableLoginCaptcha) {
+            fetchCaptcha();
+          }
+        }
+      } catch (error) {
+        console.log('获取验证码设置失败');
+        setCaptchaSettings({ enableLoginCaptcha: false });
+      }
+    };
+    
+    fetchCaptchaSettings();
+  }, []);
+
+  // 获取验证码
+  const fetchCaptcha = async () => {
+    if (!captchaSettings.enableLoginCaptcha) return;
+    
+    setCaptchaLoading(true);
+    try {
+      const response = await axios.get('/api/auth/captcha');
+      if (response.data) {
+        setCaptchaData({
+          captcha_id: response.data.captcha_id,
+          captcha_image: response.data.captcha_image
+        });
+      }
+    } catch (error) {
+      console.error('获取验证码失败:', error);
+      message.error('获取验证码失败');
+    } finally {
+      setCaptchaLoading(false);
+    }
+  };
+
+  // 刷新验证码
+  const refreshCaptcha = () => {
+    fetchCaptcha();
+  };
 
   const onFinish = async (values: LoginForm) => {
     setLoading(true);
@@ -111,6 +176,65 @@ const Login: React.FC = () => {
               placeholder="密码"
             />
           </Form.Item>
+
+          {/* 验证码输入框 */}
+          {captchaSettings.enableLoginCaptcha && captchaData && (
+            <Form.Item
+              name="captcha"
+              rules={[
+                { required: true, message: '请输入验证码！' },
+                { len: captchaSettings.captchaLength || 4, message: `验证码长度为${captchaSettings.captchaLength || 4}位！` }
+              ]}
+            >
+              <Row gutter={8}>
+                <Col span={12}>
+                  <Input
+                    prefix={<SafetyOutlined />}
+                    placeholder="验证码"
+                    maxLength={captchaSettings.captchaLength || 4}
+                    style={{ textTransform: 'uppercase' }}
+                  />
+                </Col>
+                <Col span={8}>
+                  <div 
+                    style={{ 
+                      height: 40, 
+                      border: '1px solid #d9d9d9', 
+                      borderRadius: 6,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      backgroundColor: '#fafafa'
+                    }}
+                    onClick={refreshCaptcha}
+                  >
+                    {captchaLoading ? (
+                      <ReloadOutlined spin />
+                    ) : (
+                      <img 
+                        src={captchaData.captcha_image} 
+                        alt="验证码" 
+                        style={{ 
+                          maxWidth: '100%', 
+                          maxHeight: '100%',
+                          objectFit: 'contain'
+                        }} 
+                      />
+                    )}
+                  </div>
+                </Col>
+                <Col span={4}>
+                  <Button 
+                    icon={<ReloadOutlined />} 
+                    onClick={refreshCaptcha}
+                    loading={captchaLoading}
+                    style={{ height: 40 }}
+                  />
+                </Col>
+              </Row>
+            </Form.Item>
+          )}
 
           <Form.Item>
             <Button
