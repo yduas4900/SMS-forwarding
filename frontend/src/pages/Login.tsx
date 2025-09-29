@@ -172,9 +172,10 @@ const Login: React.FC = () => {
           localStorage.setItem('token', response.data.access_token);
           localStorage.setItem('user', JSON.stringify(response.data.user_info));
           
+          // 强制刷新页面以更新AuthContext状态
           message.success('登录成功！');
           console.log('🔐 Login页面跳转到dashboard');
-          navigate('/dashboard');
+          window.location.href = '/dashboard';
         } else {
           message.error('登录失败，请检查用户名、密码和验证码');
           // 刷新验证码
