@@ -903,11 +903,19 @@ async def login_admin_with_captcha(request: LoginWithCaptchaRequest, db: Session
                 detail="验证码已过期"
             )
         
-        # 🚨 安全修复：严格验证验证码是否正确
+        # 🚨 关键修复：改进验证码比较逻辑，添加详细调试信息
         input_code = request.captcha_code.upper().strip()
         stored_code = stored_captcha["code"].strip()
         
-        logger.info(f"🔐 验证码比较: 输入='{input_code}' (长度:{len(input_code)}) vs 存储='{stored_code}' (长度:{len(stored_code)})")
+        logger.info(f"🔐 详细验证码比较:")
+        logger.info(f"🔐   输入原始: '{request.captcha_code}'")
+        logger.info(f"🔐   输入处理后: '{input_code}' (长度:{len(input_code)})")
+        logger.info(f"🔐   存储原始: '{stored_captcha['code']}'")
+        logger.info(f"🔐   存储处理后: '{stored_code}' (长度:{len(stored_code)})")
+        logger.info(f"🔐   字符对比: {[ord(c) for c in input_code]} vs {[ord(c) for c in stored_code]}")
+        
+        # 🚨 临时调试：检查验证码存储是否正常
+        logger.info(f"🔐 验证码存储详情: {stored_captcha}")
         
         if input_code != stored_code:
             logger.error(f"🔐 验证码错误: 输入'{input_code}' != 存储'{stored_code}'")
