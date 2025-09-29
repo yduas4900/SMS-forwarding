@@ -154,11 +154,14 @@ class SettingsService:
     def initialize_default_settings(db: Session):
         """初始化默认设置"""
         try:
+            # 从config.py获取当前版本，确保动态更新
+            from ..config import settings as app_config
+            
             default_settings = {
-                # 系统基础设置
-                "systemName": ("SMS转发管理系统", "string", "系统名称"),
+                # 系统基础设置 - 使用config.py中的动态值
+                "systemName": (app_config.app_name, "string", "系统名称"),
                 "systemDescription": ("专业的短信转发和验证码管理平台，支持多设备接入、智能验证码识别和客户端自定义设置", "string", "系统描述"),
-                "systemVersion": ("2.0.0", "string", "系统版本"),
+                "systemVersion": (app_config.app_version, "string", "系统版本"),
                 
                 # 安全设置
                 "sessionTimeout": (30, "integer", "会话超时时间（分钟）"),
@@ -195,7 +198,12 @@ class SettingsService:
             for key, (value, setting_type, description) in default_settings.items():
                 existing = db.query(SystemSettings).filter(SystemSettings.setting_key == key).first()
                 if not existing:
+                    # 创建新设置
                     SettingsService.set_setting(db, key, value, setting_type, description)
+                elif key in ["systemVersion", "systemName"]:
+                    # 强制更新系统版本和名称，确保与config.py同步
+                    SettingsService.set_setting(db, key, value, setting_type, description)
+                    logger.info(f"强制更新 {key} 为: {value}")
             
             logger.info("默认设置初始化完成")
         except Exception as e:

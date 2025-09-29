@@ -74,11 +74,14 @@ async def get_settings(
         # 从数据库获取所有设置
         settings = SettingsService.get_all_settings(db)
         
+        # 从config.py动态获取系统版本（只读）
+        from ..config import settings as app_config
+        
         # 如果关键设置缺失，使用默认值
         default_values = {
             "systemName": "SMS转发管理系统",
             "systemDescription": "专业的短信转发和验证码管理平台，支持多设备接入、智能验证码识别和客户端自定义设置",
-            "systemVersion": "2.0.0",
+            "systemVersion": app_config.app_version,  # 直接从config.py读取，只读
             "sessionTimeout": 30,
             "maxLoginAttempts": 5,
             "passwordMinLength": 8,
@@ -194,8 +197,12 @@ async def update_settings(
             "enableCustomerSiteCustomization": "boolean"
         }
         
-        # 保存每个设置到数据库
+        # 保存每个设置到数据库（跳过只读的系统版本）
         for key, value in settings_dict.items():
+            if key == "systemVersion":
+                # 系统版本是只读的，跳过更新
+                logger.info(f"跳过只读设置: {key}")
+                continue
             setting_type = setting_types.get(key, "string")
             SettingsService.set_setting(db, key, value, setting_type)
         
