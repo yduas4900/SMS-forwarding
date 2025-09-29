@@ -288,13 +288,13 @@ const Login: React.FC = () => {
           }
           
           // 方案4：在登录表单下方显示错误文本
-          const loginCard = document.querySelector('.login-card');
+          const loginCard = document.querySelector('.login-card') as HTMLElement;
           if (loginCard) {
-            let errorText = loginCard.querySelector('.login-error-text');
+            let errorText = loginCard.querySelector('.login-error-text') as HTMLElement;
             if (!errorText) {
-              errorText = document.createElement('div');
+              errorText = document.createElement('div') as HTMLElement;
               errorText.className = 'login-error-text';
-              errorText.style.cssText = `
+              (errorText as any).style.cssText = `
                 background: #fff2f0;
                 border: 1px solid #ffccc7;
                 color: #ff4d4f;
